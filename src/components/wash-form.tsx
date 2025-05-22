@@ -1,9 +1,10 @@
+
 "use client";
 
-import type { ChangeEvent, FormEvent } from "react";
+import type { FormEvent } from "react"; // Removed ChangeEvent as it's not directly used
 import React, { useState, useEffect, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form"; // Removed Controller as it's not directly used for Textarea notes
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,8 +24,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { suggestServices, type SuggestServicesInput, type SuggestServicesOutput } from "@/ai/flows/suggest-services";
-import { WASH_SERVICES, SERVICE_CATEGORIES, type Service } from "@/config/services";
-import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText } from "lucide-react";
+import { WASH_SERVICES, SERVICE_CATEGORIES } from "@/config/services"; // Removed Service type as it's inferred
+import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText, MessageSquare } from "lucide-react"; // Added MessageSquare
 
 const washFormSchema = z.object({
   carMake: z.string().min(2, { message: "Car make must be at least 2 characters." }),
@@ -32,6 +33,7 @@ const washFormSchema = z.object({
   carYear: z.coerce.number().min(1900, { message: "Invalid year." }).max(new Date().getFullYear() + 1, { message: "Invalid year." }),
   carCondition: z.string().min(5, { message: "Condition description is too short." }),
   customerPreferences: z.string().optional(),
+  ownerNotes: z.string().optional(), // New field for notes to owner
   selectedServices: z.array(z.string()).refine((value) => value.some((item) => item), {
     message: "You have to select at least one service.",
   }),
@@ -54,6 +56,7 @@ export default function WashForm() {
       carYear: new Date().getFullYear(),
       carCondition: "",
       customerPreferences: "",
+      ownerNotes: "",
       selectedServices: [],
     },
   });
@@ -109,20 +112,20 @@ export default function WashForm() {
     const washDetails = {
       ...data,
       totalCost,
-      washId: `WASH-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`, // Example unique ID
+      washId: `WASH-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
     };
-    console.log("Wash Request Submitted:", washDetails);
+    console.log("Wash Request Submitted:", washDetails); // This now includes ownerNotes
     toast({
       title: "Wash Request Submitted!",
       description: (
         <div>
           <p>ID: {washDetails.washId}</p>
           <p>Total Cost: ${totalCost.toFixed(2)}</p>
+          {washDetails.ownerNotes && <p>Notes: {washDetails.ownerNotes}</p>}
         </div>
       ),
       className: "bg-accent text-accent-foreground"
     });
-    // Here you would typically send data to a backend or generate a unique URL
     form.reset();
     setAiSuggestions(null);
   }
@@ -208,6 +211,22 @@ export default function WashForm() {
                       <FormControl>
                         <Textarea placeholder="e.g., Focus on interior, allergy concerns" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="ownerNotes"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel className="flex items-center gap-1">
+                        <MessageSquare className="h-4 w-4 text-muted-foreground"/> Notes for Owner (Optional)
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="e.g., Customer mentioned a scratch on the rear bumper, needs owner attention." {...field} />
+                      </FormControl>
+                       <FormDescription>Any specific notes or observations for the car owner or management.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
