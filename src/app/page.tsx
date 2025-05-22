@@ -1,9 +1,19 @@
+
+"use client"; // Ensure this is at the top if not already for useState/useEffect
+
+import React, { useState, useEffect } from 'react'; // Added useEffect and useState
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import WashForm from "@/components/wash-form";
 import StaffScheduleCalendar from "@/components/staff-schedule-calendar";
 import { Droplets, CalendarClock } from "lucide-react";
 
 export default function DashboardPage() {
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col items-center p-4 sm:p-8 bg-page-background selection:bg-primary/20">
       <header className="w-full max-w-6xl mb-8 text-center">
@@ -40,7 +50,7 @@ export default function DashboardPage() {
       </main>
       <footer className="w-full max-w-6xl mt-12 text-center">
         <p className="text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Washlytics. All rights reserved.
+          &copy; {currentYear ? currentYear : ''} Washlytics. All rights reserved.
         </p>
       </footer>
     </div>

@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react'; // Added useEffect
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
@@ -17,52 +18,59 @@ interface Shift {
   role: string;
 }
 
-// Mock data for staff shifts
-const MOCK_SHIFTS: Shift[] = [
+// Initial static mock data for staff shifts
+const INITIAL_STATIC_SHIFTS: Shift[] = [
   { id: '1', staffName: 'Alice Smith', date: '2024-07-28', startTime: '09:00 AM', endTime: '05:00 PM', role: 'Washer' },
   { id: '2', staffName: 'Bob Johnson', date: '2024-07-28', startTime: '10:00 AM', endTime: '06:00 PM', role: 'Detailer' },
   { id: '3', staffName: 'Carol White', date: '2024-07-29', startTime: '08:00 AM', endTime: '04:00 PM', role: 'Supervisor' },
   { id: '4', staffName: 'David Brown', date: '2024-07-29', startTime: '09:00 AM', endTime: '05:00 PM', role: 'Washer' },
   { id: '5', staffName: 'Eve Davis', date: '2024-07-30', startTime: '11:00 AM', endTime: '07:00 PM', role: 'Cashier' },
-  // Add more shifts for different dates to showcase calendar functionality
   { id: '6', staffName: 'Alice Smith', date: '2024-08-01', startTime: '09:00 AM', endTime: '05:00 PM', role: 'Washer' },
   { id: '7', staffName: 'Bob Johnson', date: '2024-08-01', startTime: '10:00 AM', endTime: '06:00 PM', role: 'Detailer' },
   { id: '8', staffName: 'Frank Green', date: '2024-07-28', startTime: '12:00 PM', endTime: '08:00 PM', role: 'Washer' },
 ];
 
-// Generate shifts for the next 30 days for better calendar visualization
-const today = new Date();
-const staffNames = ["Alice Smith", "Bob Johnson", "Carol White", "David Brown", "Eve Davis", "Frank Green", "Grace Hall", "Henry Ives"];
-const roles = ["Washer", "Detailer", "Supervisor", "Cashier"];
-
-for (let i = 0; i < 30; i++) {
-  const shiftDate = new Date(today);
-  shiftDate.setDate(today.getDate() + i);
-  const isoDate = format(shiftDate, 'yyyy-MM-dd');
-
-  // Add 2-3 shifts per day
-  for (let j = 0; j < Math.floor(Math.random() * 2) + 2; j++) {
-    MOCK_SHIFTS.push({
-      id: `gen-${i}-${j}`,
-      staffName: staffNames[Math.floor(Math.random() * staffNames.length)],
-      date: isoDate,
-      startTime: `${String(Math.floor(Math.random() * 4) + 8).padStart(2, '0')}:00 AM`,
-      endTime: `${String(Math.floor(Math.random() * 4) + 4).padStart(2, '0')}:00 PM`,
-      role: roles[Math.floor(Math.random() * roles.length)],
-    });
-  }
-}
-
-
 export default function StaffScheduleCalendar() {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [allShifts, setAllShifts] = useState<Shift[]>(INITIAL_STATIC_SHIFTS);
+
+  useEffect(() => {
+    // Set selectedDate on client mount
+    setSelectedDate(new Date());
+
+    // Generate additional dynamic shifts on client mount
+    const today = new Date();
+    const staffNames = ["Alice Smith", "Bob Johnson", "Carol White", "David Brown", "Eve Davis", "Frank Green", "Grace Hall", "Henry Ives"];
+    const roles = ["Washer", "Detailer", "Supervisor", "Cashier"];
+    const dynamicallyGeneratedShifts: Shift[] = [];
+
+    for (let i = 0; i < 30; i++) {
+      const shiftDate = new Date(today);
+      shiftDate.setDate(today.getDate() + i);
+      const isoDate = format(shiftDate, 'yyyy-MM-dd');
+
+      // Add 2-3 shifts per day
+      for (let j = 0; j < Math.floor(Math.random() * 2) + 2; j++) {
+        dynamicallyGeneratedShifts.push({
+          id: `gen-${i}-${j}`,
+          staffName: staffNames[Math.floor(Math.random() * staffNames.length)],
+          date: isoDate,
+          startTime: `${String(Math.floor(Math.random() * 4) + 8).padStart(2, '0')}:00 AM`,
+          endTime: `${String(Math.floor(Math.random() * 4) + 4).padStart(2, '0')}:00 PM`,
+          role: roles[Math.floor(Math.random() * roles.length)],
+        });
+      }
+    }
+    // Combine static shifts with newly generated dynamic shifts
+    setAllShifts([...INITIAL_STATIC_SHIFTS, ...dynamicallyGeneratedShifts]);
+  }, []); // Empty dependency array ensures this runs once on mount
 
   const shiftsForSelectedDate = useMemo(() => {
     if (!selectedDate) return [];
-    return MOCK_SHIFTS.filter(shift => isSameDay(parseISO(shift.date), selectedDate));
-  }, [selectedDate]);
+    return allShifts.filter(shift => isSameDay(parseISO(shift.date), selectedDate));
+  }, [selectedDate, allShifts]);
 
-  const shiftDates = useMemo(() => MOCK_SHIFTS.map(shift => parseISO(shift.date)), []);
+  const shiftDates = useMemo(() => allShifts.map(shift => parseISO(shift.date)), [allShifts]);
   
   return (
     <Card className="w-full max-w-4xl mx-auto shadow-xl">
@@ -128,7 +136,7 @@ export default function StaffScheduleCalendar() {
               </ul>
             </ScrollArea>
           ) : (
-            <p className="text-muted-foreground italic">No shifts scheduled for this date.</p>
+            selectedDate ? <p className="text-muted-foreground italic">No shifts scheduled for this date.</p> : <p className="text-muted-foreground italic">Loading schedule...</p>
           )}
         </div>
       </CardContent>
