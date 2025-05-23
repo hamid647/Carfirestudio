@@ -7,9 +7,10 @@ import WashForm from "@/components/wash-form";
 import StaffScheduleCalendar from "@/components/staff-schedule-calendar";
 import BillingChangeRequestForm from '@/components/billing-change-request-form';
 import OwnerRequestsView from '@/components/owner-requests-view';
-import WashHistoryView from '@/components/wash-history-view'; // Ensured import
+import WashHistoryView from '@/components/wash-history-view';
+import OwnerAnalyticsDashboard from '@/components/owner-analytics-dashboard'; // Added import
 import { useAuth } from '@/hooks/useAuth';
-import { Droplets, CalendarClock, Edit3, ShieldCheck, History } from "lucide-react";
+import { Droplets, CalendarClock, Edit3, ShieldCheck, History, BarChart3 } from "lucide-react"; // Added BarChart3 icon
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
@@ -19,7 +20,7 @@ export default function DashboardPage() {
     if (currentUser?.role === 'staff') {
       setActiveTab('wash-form');
     } else if (currentUser?.role === 'owner') {
-      setActiveTab('billing-requests'); // Default for owner
+      setActiveTab('analytics'); // Default for owner to analytics
     }
   }, [currentUser]);
 
@@ -36,6 +37,7 @@ export default function DashboardPage() {
   ];
 
   const ownerTabs = [
+    { value: "analytics", label: "Analytics", icon: BarChart3 }, // Added Analytics tab
     { value: "wash-history", label: "Wash History", icon: History },
     { value: "billing-requests", label: "Billing Requests", icon: ShieldCheck },
     { value: "staff-schedule", label: "Staff Schedule", icon: CalendarClock },
@@ -43,10 +45,8 @@ export default function DashboardPage() {
 
   const TABS_CONFIG = currentUser.role === 'owner' ? ownerTabs : staffTabs;
 
-  // Initialize activeTab if not set and TABS_CONFIG has items
   useEffect(() => {
     if (!activeTab && TABS_CONFIG.length > 0) {
-      // If current activeTab is not valid for the current role, reset to default
       const currentTabIsValid = TABS_CONFIG.some(tab => tab.value === activeTab);
       if (!currentTabIsValid) {
         setActiveTab(TABS_CONFIG[0].value);
@@ -69,7 +69,7 @@ export default function DashboardPage() {
         </p>
       </header>
 
-      <main className="w-full max-w-6xl">
+      <main className="w-full max-w-7xl"> {/* Increased max-width for analytics */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className={`grid w-full grid-cols-${TABS_CONFIG.length} md:mx-auto mb-6 h-auto`}>
             {TABS_CONFIG.map(tab => (
@@ -100,6 +100,9 @@ export default function DashboardPage() {
           {/* Owner Content */}
           {currentUser.role === 'owner' && (
             <>
+              <TabsContent value="analytics">
+                <OwnerAnalyticsDashboard />
+              </TabsContent>
               <TabsContent value="wash-history">
                 <WashHistoryView />
               </TabsContent>
@@ -116,3 +119,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
