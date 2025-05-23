@@ -7,8 +7,9 @@ import WashForm from "@/components/wash-form";
 import StaffScheduleCalendar from "@/components/staff-schedule-calendar";
 import BillingChangeRequestForm from '@/components/billing-change-request-form';
 import OwnerRequestsView from '@/components/owner-requests-view';
+import WashHistoryView from '@/components/wash-history-view'; // Added import
 import { useAuth } from '@/hooks/useAuth';
-import { Droplets, CalendarClock, Edit3, ShieldCheck, Package } from "lucide-react"; // Added Edit3 and ShieldCheck
+import { Droplets, CalendarClock, Edit3, ShieldCheck, History } from "lucide-react"; // Added History icon
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
@@ -29,15 +30,15 @@ export default function DashboardPage() {
   
   const staffTabs = [
     { value: "wash-form", label: "New Wash", icon: Droplets },
+    { value: "wash-history", label: "Wash History", icon: History },
     { value: "staff-schedule", label: "Staff Schedule", icon: CalendarClock },
     { value: "billing-change-request", label: "Request Billing Change", icon: Edit3 },
   ];
 
   const ownerTabs = [
+    { value: "wash-history", label: "Wash History", icon: History },
     { value: "billing-requests", label: "Billing Requests", icon: ShieldCheck },
     { value: "staff-schedule", label: "Staff Schedule", icon: CalendarClock },
-    // Owners might also want to see the wash form, optionally:
-    // { value: "wash-form", label: "New Wash (View)", icon: Package },
   ];
 
   const TABS_CONFIG = currentUser.role === 'owner' ? ownerTabs : staffTabs;
@@ -77,6 +78,9 @@ export default function DashboardPage() {
               <TabsContent value="wash-form">
                 <WashForm />
               </TabsContent>
+              <TabsContent value="wash-history">
+                <WashHistoryView />
+              </TabsContent>
               <TabsContent value="staff-schedule">
                 <StaffScheduleCalendar />
               </TabsContent>
@@ -89,13 +93,15 @@ export default function DashboardPage() {
           {/* Owner Content */}
           {currentUser.role === 'owner' && (
             <>
+              <TabsContent value="wash-history">
+                <WashHistoryView />
+              </TabsContent>
               <TabsContent value="billing-requests">
                 <OwnerRequestsView />
               </TabsContent>
               <TabsContent value="staff-schedule">
                 <StaffScheduleCalendar />
               </TabsContent>
-               {/* <TabsContent value="wash-form"> <WashForm /> </TabsContent> */}
             </>
           )}
         </Tabs>
