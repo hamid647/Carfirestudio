@@ -16,3 +16,17 @@ export interface BillingChangeRequest {
   requestedAt: string; // ISO date string
   status: 'pending' | 'approved' | 'rejected';
 }
+
+// Defines the structure for a car wash record
+export interface WashRecord {
+  washId: string; // Unique ID for the wash, typically generated with a timestamp
+  carMake: string;
+  carModel: string;
+  carYear: number;
+  carCondition: string;
+  customerPreferences?: string;
+  ownerNotes?: string;
+  selectedServices: string[]; // Array of service IDs
+  totalCost: number;
+  createdAt: string; // ISO date string when the record was created
+}

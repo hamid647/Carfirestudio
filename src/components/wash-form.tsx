@@ -1,10 +1,9 @@
 
 "use client";
 
-import type { FormEvent } from "react"; // Removed ChangeEvent as it's not directly used
 import React, { useState, useEffect, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form"; // Removed Controller as it's not directly used for Textarea notes
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,9 +22,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth"; // Import useAuth
 import { suggestServices, type SuggestServicesInput, type SuggestServicesOutput } from "@/ai/flows/suggest-services";
-import { WASH_SERVICES, SERVICE_CATEGORIES } from "@/config/services"; // Removed Service type as it's inferred
-import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText, MessageSquare } from "lucide-react"; // Added MessageSquare
+import { WASH_SERVICES, SERVICE_CATEGORIES } from "@/config/services";
+import type { WashRecord } from "@/types"; // Import WashRecord type
+import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText, MessageSquare } from "lucide-react";
 
 const washFormSchema = z.object({
   carMake: z.string().min(2, { message: "Car make must be at least 2 characters." }),
@@ -33,7 +34,7 @@ const washFormSchema = z.object({
   carYear: z.coerce.number().min(1900, { message: "Invalid year." }).max(new Date().getFullYear() + 1, { message: "Invalid year." }),
   carCondition: z.string().min(5, { message: "Condition description is too short." }),
   customerPreferences: z.string().optional(),
-  ownerNotes: z.string().optional(), // New field for notes to owner
+  ownerNotes: z.string().optional(),
   selectedServices: z.array(z.string()).refine((value) => value.some((item) => item), {
     message: "You have to select at least one service.",
   }),
@@ -43,6 +44,7 @@ type WashFormData = z.infer<typeof washFormSchema>;
 
 export default function WashForm() {
   const { toast } = useToast();
+  const { addWashRecord } = useAuth(); // Get addWashRecord from context
   const [isPending, startTransition] = useTransition();
   const [aiSuggestions, setAiSuggestions] = useState<SuggestServicesOutput | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -109,25 +111,28 @@ export default function WashForm() {
   };
 
   function onSubmit(data: WashFormData) {
-    const washDetails = {
+    const washDataForRecord: Omit<WashRecord, 'washId' | 'createdAt'> = {
       ...data,
+      carYear: Number(data.carYear), // Ensure carYear is a number
       totalCost,
-      washId: `WASH-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
     };
-    console.log("Wash Request Submitted:", washDetails); // This now includes ownerNotes
+    
+    addWashRecord(washDataForRecord); // Use context function
+
     toast({
       title: "Wash Request Submitted!",
       description: (
         <div>
-          <p>ID: {washDetails.washId}</p>
+          <p>Successfully added to wash history.</p>
           <p>Total Cost: ${totalCost.toFixed(2)}</p>
-          {washDetails.ownerNotes && <p>Notes: {washDetails.ownerNotes}</p>}
+          {data.ownerNotes && <p>Notes: {data.ownerNotes}</p>}
         </div>
       ),
       className: "bg-accent text-accent-foreground"
     });
     form.reset();
     setAiSuggestions(null);
+    setTotalCost(0); // Reset total cost
   }
 
   return (
@@ -183,7 +188,7 @@ export default function WashForm() {
                     <FormItem>
                       <FormLabel>Year</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="e.g., 2020" {...field} />
+                        <Input type="number" placeholder="e.g., 2020" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || '')} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

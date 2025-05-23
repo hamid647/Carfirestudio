@@ -7,9 +7,9 @@ import WashForm from "@/components/wash-form";
 import StaffScheduleCalendar from "@/components/staff-schedule-calendar";
 import BillingChangeRequestForm from '@/components/billing-change-request-form';
 import OwnerRequestsView from '@/components/owner-requests-view';
-import WashHistoryView from '@/components/wash-history-view'; // Added import
+import WashHistoryView from '@/components/wash-history-view'; // Ensured import
 import { useAuth } from '@/hooks/useAuth';
-import { Droplets, CalendarClock, Edit3, ShieldCheck, History } from "lucide-react"; // Added History icon
+import { Droplets, CalendarClock, Edit3, ShieldCheck, History } from "lucide-react";
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
@@ -19,7 +19,7 @@ export default function DashboardPage() {
     if (currentUser?.role === 'staff') {
       setActiveTab('wash-form');
     } else if (currentUser?.role === 'owner') {
-      setActiveTab('billing-requests');
+      setActiveTab('billing-requests'); // Default for owner
     }
   }, [currentUser]);
 
@@ -43,12 +43,19 @@ export default function DashboardPage() {
 
   const TABS_CONFIG = currentUser.role === 'owner' ? ownerTabs : staffTabs;
 
-  if (!activeTab && TABS_CONFIG.length > 0) {
-     setActiveTab(TABS_CONFIG[0].value); // Initialize activeTab if not set
-  }
+  // Initialize activeTab if not set and TABS_CONFIG has items
+  useEffect(() => {
+    if (!activeTab && TABS_CONFIG.length > 0) {
+      // If current activeTab is not valid for the current role, reset to default
+      const currentTabIsValid = TABS_CONFIG.some(tab => tab.value === activeTab);
+      if (!currentTabIsValid) {
+        setActiveTab(TABS_CONFIG[0].value);
+      }
+    }
+  }, [activeTab, TABS_CONFIG]);
   
-  if (!activeTab && TABS_CONFIG.length > 0) return <p>Loading tabs...</p>;
-  if (TABS_CONFIG.length === 0) return <p>No tabs available for your role.</p>;
+  if (!activeTab && TABS_CONFIG.length > 0) return <p className="text-center py-10">Loading tabs...</p>;
+  if (TABS_CONFIG.length === 0) return <p className="text-center py-10">No tabs available for your role.</p>;
 
 
   return (
@@ -63,7 +70,7 @@ export default function DashboardPage() {
       </header>
 
       <main className="w-full max-w-6xl">
-        <Tabs defaultValue={TABS_CONFIG[0].value} value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className={`grid w-full grid-cols-${TABS_CONFIG.length} md:mx-auto mb-6 h-auto`}>
             {TABS_CONFIG.map(tab => (
               <TabsTrigger key={tab.value} value={tab.value} className="py-3 text-base">
