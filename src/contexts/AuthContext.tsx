@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Role, User, BillingChangeRequest, WashRecord } from '@/types';
+import type { Role, User, BillingChangeRequest, WashRecord, NotificationRecord } from '@/types';
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
 export interface AuthContextType {
@@ -16,6 +16,11 @@ export interface AuthContextType {
   addWashRecord: (recordData: Omit<WashRecord, 'washId' | 'createdAt'>) => void;
   updateWashRecord: (washId: string, updatedData: Partial<Omit<WashRecord, 'washId' | 'createdAt'>>) => void;
   deleteWashRecord: (washId: string) => void;
+  notifications: NotificationRecord[];
+  addNotification: (notificationData: Omit<NotificationRecord, 'id' | 'timestamp'>) => void;
+  markNotificationAsRead: (notificationId: string) => void;
+  markAllNotificationsAsRead: () => void;
+  getUnreadNotificationCount: () => number;
   isLoading: boolean;
 }
 
@@ -34,6 +39,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [billingRequests, setBillingRequests] = useState<BillingChangeRequest[]>([]);
   const [washRecords, setWashRecords] = useState<WashRecord[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -49,6 +55,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedWashRecords = localStorage.getItem('washRecords');
       if (storedWashRecords) {
         setWashRecords(JSON.parse(storedWashRecords));
+      }
+      const storedNotifications = localStorage.getItem('notifications');
+      if (storedNotifications) {
+        setNotifications(JSON.parse(storedNotifications));
       }
     } catch (error) {
       console.error("Failed to load from localStorage", error);
@@ -80,6 +90,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(false); 
   }, []);
 
+  // Notification CRUD
+  const addNotification = useCallback((notificationData: Omit<NotificationRecord, 'id' | 'timestamp'>) => {
+    const newNotification: NotificationRecord = {
+      ...notificationData,
+      id: `NOTIF-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+    };
+    setNotifications(prevNotifications => {
+      const updatedNotifications = [newNotification, ...prevNotifications];
+      try {
+        localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+      } catch (error) {
+        console.error("Failed to save notifications to localStorage", error);
+      }
+      return updatedNotifications;
+    });
+  }, []);
+
+  const markNotificationAsRead = useCallback((notificationId: string) => {
+    setNotifications(prevNotifications => {
+      const updatedNotifications = prevNotifications.map(notif =>
+        notif.id === notificationId ? { ...notif, read: true } : notif
+      );
+      try {
+        localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+      } catch (error) {
+        console.error("Failed to save notifications to localStorage", error);
+      }
+      return updatedNotifications;
+    });
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(() => {
+    if (!currentUser) return;
+    setNotifications(prevNotifications => {
+      const updatedNotifications = prevNotifications.map(notif =>
+        (notif.userId === currentUser.id || notif.roleTarget === currentUser.role) && !notif.read ? { ...notif, read: true } : notif
+      );
+      try {
+        localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+      } catch (error) {
+        console.error("Failed to save notifications to localStorage", error);
+      }
+      return updatedNotifications;
+    });
+  }, [currentUser]);
+
+  const getUnreadNotificationCount = useCallback(() => {
+    if (!currentUser) return 0;
+    return notifications.filter(n => (n.userId === currentUser.id || n.roleTarget === currentUser.role) && !n.read).length;
+  }, [notifications, currentUser]);
+
+
   const addBillingRequest = useCallback((requestData: Omit<BillingChangeRequest, 'id' | 'requestedAt' | 'status' | 'staffId' | 'staffName'>) => {
     if (!currentUser || currentUser.role !== 'staff') {
       console.error("Only staff can add billing requests.");
@@ -102,17 +165,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       return updatedRequests;
     });
-  }, [currentUser]);
+
+    // Notify Owner
+    addNotification({
+      userId: MOCK_USERS.owner.id, // Target specific owner
+      roleTarget: 'owner',
+      message: `New billing change request (#${newRequest.id.substring(0,6)}) for Wash ID ${newRequest.washId} submitted by ${currentUser.username}.`,
+      read: false,
+      link: `/dashboard?tab=billing-requests&highlight=${newRequest.id}`,
+      relatedRecordId: newRequest.id,
+    });
+  }, [currentUser, addNotification]);
 
   const updateBillingRequestStatus = useCallback((requestId: string, status: 'approved' | 'rejected') => {
     if (!currentUser || currentUser.role !== 'owner') {
       console.error("Only owner can update billing request status.");
       return;
     }
+    let staffToNotifyId: string | undefined;
+    let originalRequestWashId: string | undefined;
+
     setBillingRequests(prevRequests => {
-      const updatedRequests = prevRequests.map(req =>
-        req.id === requestId ? { ...req, status } : req
-      );
+      const updatedRequests = prevRequests.map(req => {
+        if (req.id === requestId) {
+          staffToNotifyId = req.staffId;
+          originalRequestWashId = req.washId;
+          return { ...req, status };
+        }
+        return req;
+      });
       try {
         localStorage.setItem('billingRequests', JSON.stringify(updatedRequests));
       } catch (error) {
@@ -120,7 +201,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       return updatedRequests;
     });
-  }, [currentUser]);
+
+    // Notify Staff (generic staff notification for now)
+    if (staffToNotifyId && originalRequestWashId) {
+       addNotification({
+        userId: staffToNotifyId, // This would target a specific staff if we had individual staff users
+        roleTarget: 'staff', // Fallback for generic staff
+        message: `Your billing change request (#${requestId.substring(0,6)}) for Wash ID ${originalRequestWashId} has been ${status}.`,
+        read: false,
+        relatedRecordId: requestId,
+      });
+    }
+  }, [currentUser, addNotification]);
 
   // Wash Record CRUD
   const addWashRecord = useCallback((recordData: Omit<WashRecord, 'washId' | 'createdAt'>) => {
@@ -188,6 +280,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       addWashRecord,
       updateWashRecord,
       deleteWashRecord,
+      notifications,
+      addNotification,
+      markNotificationAsRead,
+      markAllNotificationsAsRead,
+      getUnreadNotificationCount,
       isLoading 
     }}>
       {children}

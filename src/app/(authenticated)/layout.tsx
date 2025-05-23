@@ -1,19 +1,35 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, UserCircle, Loader2 } from 'lucide-react';
+import { LogOut, UserCircle, Loader2, Bell, CheckCheck, MailWarning } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNowStrict } from 'date-fns';
+import type { NotificationRecord } from '@/types';
+import { cn } from '@/lib/utils';
 
 export default function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, logout, currentUser, isLoading } = useAuth();
+  const { 
+    isAuthenticated, 
+    logout, 
+    currentUser, 
+    isLoading,
+    notifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    getUnreadNotificationCount
+  } = useAuth();
   const router = useRouter();
+  const [isNotificationPopoverOpen, setIsNotificationPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -21,13 +37,33 @@ export default function AuthenticatedLayout({
     }
   }, [isAuthenticated, isLoading, router]);
 
-  if (isLoading || !isAuthenticated) {
+  if (isLoading || !isAuthenticated || !currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="mt-4 text-lg text-muted-foreground">Authenticating...</p>
       </div>
     );
+  }
+
+  const userNotifications = notifications
+    .filter(n => n.userId === currentUser.id || n.roleTarget === currentUser.role)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const unreadCount = getUnreadNotificationCount();
+
+  const handleNotificationClick = (notification: NotificationRecord) => {
+    if (!notification.read) {
+      markNotificationAsRead(notification.id);
+    }
+    if (notification.link) {
+      router.push(notification.link);
+    }
+    setIsNotificationPopoverOpen(false); // Close popover after interaction
+  };
+  
+  const handleMarkAllRead = () => {
+    markAllNotificationsAsRead();
   }
 
   return (
@@ -47,6 +83,61 @@ export default function AuthenticatedLayout({
                 <span>{currentUser.username} ({currentUser.role})</span>
               </div>
             )}
+
+            <Popover open={isNotificationPopoverOpen} onOpenChange={setIsNotificationPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 w-4 min-w-4 p-0 flex items-center justify-center text-xs">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                  <span className="sr-only">Notifications</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0">
+                <div className="p-4 border-b">
+                  <h3 className="text-lg font-semibold">Notifications</h3>
+                </div>
+                {userNotifications.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground text-center">
+                    <MailWarning className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                    No new notifications.
+                  </div>
+                ) : (
+                  <>
+                    <ScrollArea className="h-[300px]">
+                      <div className="divide-y">
+                        {userNotifications.map((notif) => (
+                          <div
+                            key={notif.id}
+                            onClick={() => handleNotificationClick(notif)}
+                            className={cn(
+                              "p-3 hover:bg-muted/50 cursor-pointer",
+                              !notif.read && "bg-primary/10"
+                            )}
+                          >
+                            <p className={cn("text-sm mb-0.5", !notif.read && "font-semibold")}>{notif.message}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDistanceToNowStrict(new Date(notif.timestamp), { addSuffix: true })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    {unreadCount > 0 && (
+                      <div className="p-2 border-t">
+                        <Button variant="link" size="sm" className="w-full" onClick={handleMarkAllRead}>
+                          <CheckCheck className="mr-2 h-4 w-4"/> Mark all as read
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </PopoverContent>
+            </Popover>
+
             <Button variant="ghost" size="sm" onClick={() => { logout(); router.push('/login'); }}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout

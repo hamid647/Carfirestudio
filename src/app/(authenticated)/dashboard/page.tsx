@@ -2,33 +2,25 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import WashForm from "@/components/wash-form";
 import StaffScheduleCalendar from "@/components/staff-schedule-calendar";
 import BillingChangeRequestForm from '@/components/billing-change-request-form';
 import OwnerRequestsView from '@/components/owner-requests-view';
 import WashHistoryView from '@/components/wash-history-view';
-import OwnerAnalyticsDashboard from '@/components/owner-analytics-dashboard'; // Added import
+import OwnerAnalyticsDashboard from '@/components/owner-analytics-dashboard';
 import { useAuth } from '@/hooks/useAuth';
-import { Droplets, CalendarClock, Edit3, ShieldCheck, History, BarChart3 } from "lucide-react"; // Added BarChart3 icon
+import { Droplets, CalendarClock, Edit3, ShieldCheck, History, BarChart3 } from "lucide-react";
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab');
+  
   const [activeTab, setActiveTab] = useState<string>("");
 
-  useEffect(() => {
-    if (currentUser?.role === 'staff') {
-      setActiveTab('wash-form');
-    } else if (currentUser?.role === 'owner') {
-      setActiveTab('analytics'); // Default for owner to analytics
-    }
-  }, [currentUser]);
-
-
-  if (!currentUser) {
-    return <p className="text-center py-10">Loading user data...</p>;
-  }
-  
+  // Define tab configurations
   const staffTabs = [
     { value: "wash-form", label: "New Wash", icon: Droplets },
     { value: "wash-history", label: "Wash History", icon: History },
@@ -37,22 +29,58 @@ export default function DashboardPage() {
   ];
 
   const ownerTabs = [
-    { value: "analytics", label: "Analytics", icon: BarChart3 }, // Added Analytics tab
+    { value: "analytics", label: "Analytics", icon: BarChart3 },
     { value: "wash-history", label: "Wash History", icon: History },
     { value: "billing-requests", label: "Billing Requests", icon: ShieldCheck },
     { value: "staff-schedule", label: "Staff Schedule", icon: CalendarClock },
   ];
 
-  const TABS_CONFIG = currentUser.role === 'owner' ? ownerTabs : staffTabs;
+  const TABS_CONFIG = currentUser?.role === 'owner' ? ownerTabs : staffTabs;
 
   useEffect(() => {
-    if (!activeTab && TABS_CONFIG.length > 0) {
+    // Set initial tab based on URL param or role default
+    if (initialTab && TABS_CONFIG.some(tab => tab.value === initialTab)) {
+      setActiveTab(initialTab);
+    } else if (currentUser?.role === 'staff') {
+      setActiveTab('wash-form');
+    } else if (currentUser?.role === 'owner') {
+      setActiveTab('analytics');
+    } else if (TABS_CONFIG.length > 0) {
+        // Fallback if no other condition met and tabs exist
+        setActiveTab(TABS_CONFIG[0].value);
+    }
+  }, [currentUser, initialTab, TABS_CONFIG]); // TABS_CONFIG added as dependency
+
+
+  if (!currentUser) {
+    return <p className="text-center py-10">Loading user data...</p>;
+  }
+  
+  // This effect ensures activeTab is always valid, especially after initial role-based setting
+  useEffect(() => {
+    if (activeTab && TABS_CONFIG.length > 0) {
       const currentTabIsValid = TABS_CONFIG.some(tab => tab.value === activeTab);
       if (!currentTabIsValid) {
-        setActiveTab(TABS_CONFIG[0].value);
+        // If current activeTab is not valid for the role, reset to default for that role
+        if (currentUser?.role === 'staff') {
+          setActiveTab('wash-form');
+        } else if (currentUser?.role === 'owner') {
+          setActiveTab('analytics');
+        } else {
+           setActiveTab(TABS_CONFIG[0].value); // Fallback
+        }
       }
+    } else if (!activeTab && TABS_CONFIG.length > 0) {
+        // If activeTab is not set at all, set it to the default for the role
+         if (currentUser?.role === 'staff') {
+          setActiveTab('wash-form');
+        } else if (currentUser?.role === 'owner') {
+          setActiveTab('analytics');
+        } else {
+           setActiveTab(TABS_CONFIG[0].value); // Fallback
+        }
     }
-  }, [activeTab, TABS_CONFIG]);
+  }, [activeTab, TABS_CONFIG, currentUser]); // currentUser added
   
   if (!activeTab && TABS_CONFIG.length > 0) return <p className="text-center py-10">Loading tabs...</p>;
   if (TABS_CONFIG.length === 0) return <p className="text-center py-10">No tabs available for your role.</p>;
@@ -69,11 +97,11 @@ export default function DashboardPage() {
         </p>
       </header>
 
-      <main className="w-full max-w-7xl"> {/* Increased max-width for analytics */}
+      <main className="w-full max-w-7xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full grid-cols-${TABS_CONFIG.length} md:mx-auto mb-6 h-auto`}>
+          <TabsList className={`grid w-full grid-cols-1 sm:grid-cols-2 md:grid-cols-${TABS_CONFIG.length} md:mx-auto mb-6 h-auto`}>
             {TABS_CONFIG.map(tab => (
-              <TabsTrigger key={tab.value} value={tab.value} className="py-3 text-base">
+              <TabsTrigger key={tab.value} value={tab.value} className="py-3 text-base flex-wrap h-auto min-h-[3rem]">
                 <tab.icon className="mr-2 h-5 w-5" /> {tab.label}
               </TabsTrigger>
             ))}
@@ -119,4 +147,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
