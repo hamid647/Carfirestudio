@@ -12,22 +12,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import EditWashForm from '@/components/edit-wash-form';
 import { format, parseISO } from 'date-fns';
-import { Trash2, Edit, History, Search, Eye, User as UserIcon } from 'lucide-react'; // Added UserIcon
+import { Trash2, Edit, History, Search, Eye, User as UserIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-// No longer importing static WASH_SERVICES, will get from useAuth
 
 export default function WashHistoryView() {
-  const { currentUser, washRecords, deleteWashRecord, services: WASH_SERVICES } = useAuth(); // Get services from context
+  const { currentUser, washRecords, deleteWashRecord, services: WASH_SERVICES } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedWashToEdit, setSelectedWashToEdit] = useState<WashRecord | null>(null);
 
   const recordsToDisplay = washRecords
     .filter(record =>
-      record.washId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || // Search by customer name
-      record.carMake.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.carModel.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (record.washId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (record.customerName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (record.carMake?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (record.carModel?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (record.carYear && record.carYear.toString().includes(searchTerm))
     )
     .sort((a, b) => parseISO(b.createdAt).getTime() - parseISO(a.createdAt).getTime());
@@ -59,7 +58,7 @@ export default function WashHistoryView() {
     return (
         <ScrollArea className="max-h-[60vh]">
             <div className="space-y-3 py-4 text-left pr-4">
-                <p><strong>Customer:</strong> {wash.customerName}</p>
+                <p><strong>Customer:</strong> {wash.customerName || 'N/A'}</p>
                 <p><strong>Car:</strong> {wash.carMake} {wash.carModel} ({wash.carYear})</p>
                 <p><strong>Condition:</strong> {wash.carCondition}</p>
                 <p><strong>Preferences:</strong> {wash.customerPreferences || 'N/A'}</p>
@@ -119,7 +118,7 @@ export default function WashHistoryView() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">Wash ID</TableHead>
-                  <TableHead>Customer</TableHead> {/* Added Customer column */}
+                  <TableHead>Customer</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Car</TableHead>
                   <TableHead className="text-right">Total Cost</TableHead>
@@ -132,7 +131,7 @@ export default function WashHistoryView() {
                   return (
                     <TableRow key={wash.washId}>
                       <TableCell className="font-medium">{wash.washId}</TableCell>
-                      <TableCell>{wash.customerName}</TableCell> {/* Display Customer Name */}
+                      <TableCell>{wash.customerName || 'N/A'}</TableCell>
                       <TableCell>
                         {format(washDate, 'PPpp')}
                       </TableCell>
@@ -185,7 +184,7 @@ export default function WashHistoryView() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the wash record <span className="font-semibold">{wash.washId}</span> for {wash.customerName}.
+                                    This action cannot be undone. This will permanently delete the wash record <span className="font-semibold">{wash.washId}</span> for {wash.customerName || 'this customer'}.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
