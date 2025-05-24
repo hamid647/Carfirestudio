@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { WASH_SERVICES, SERVICE_CATEGORIES } from "@/config/services";
 import type { WashRecord } from "@/types";
-import { Car, ListChecks, ShoppingCart, MessageSquare, Save } from "lucide-react";
+import { Car, ListChecks, ShoppingCart, MessageSquare, Save, Percent } from "lucide-react";
 
 const editWashFormSchema = z.object({
   carMake: z.string().min(2, { message: "Car make must be at least 2 characters." }),
@@ -36,7 +36,7 @@ const editWashFormSchema = z.object({
   selectedServices: z.array(z.string()).refine((value) => value.some((item) => item), {
     message: "You have to select at least one service.",
   }),
-  // totalCost is not directly in schema as it's calculated
+  discountPercentage: z.coerce.number().min(0, "Discount cannot be negative.").max(100, "Discount cannot exceed 100%.").optional(),
 });
 
 type EditWashFormData = z.infer<typeof editWashFormSchema>;
@@ -49,7 +49,10 @@ interface EditWashFormProps {
 export default function EditWashForm({ washRecord, onFinished }: EditWashFormProps) {
   const { toast } = useToast();
   const { updateWashRecord, currentUser } = useAuth();
-  const [totalCost, setTotalCost] = useState(washRecord.totalCost);
+  
+  const [subtotal, setSubtotal] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [finalTotalCost, setFinalTotalCost] = useState(0);
 
   const form = useForm<EditWashFormData>({
     resolver: zodResolver(editWashFormSchema),
@@ -61,18 +64,28 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
       customerPreferences: washRecord.customerPreferences || "",
       ownerNotes: washRecord.ownerNotes || "",
       selectedServices: washRecord.selectedServices || [],
+      discountPercentage: washRecord.discountPercentage || 0,
     },
   });
 
   const selectedServiceIds = form.watch("selectedServices");
+  const discountInputPercentage = form.watch("discountPercentage");
 
   useEffect(() => {
-    const cost = selectedServiceIds.reduce((acc, id) => {
+    const currentSubtotal = selectedServiceIds.reduce((acc, id) => {
       const service = WASH_SERVICES.find(s => s.id === id);
       return acc + (service ? service.price : 0);
     }, 0);
-    setTotalCost(cost);
-  }, [selectedServiceIds]);
+    setSubtotal(currentSubtotal);
+
+    const currentDiscountValue = discountInputPercentage || 0;
+    const currentDiscountAmount = currentSubtotal * (currentDiscountValue / 100);
+    setDiscountAmount(currentDiscountAmount);
+
+    const currentFinalTotal = currentSubtotal - currentDiscountAmount;
+    setFinalTotalCost(currentFinalTotal);
+
+  }, [selectedServiceIds, discountInputPercentage]);
 
   function onSubmit(data: EditWashFormData) {
     if (currentUser?.role !== 'owner') {
@@ -83,17 +96,18 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
     const updatedWashData: Partial<Omit<WashRecord, 'washId' | 'createdAt'>> = {
       ...data,
       carYear: Number(data.carYear),
-      totalCost,
+      totalCost: finalTotalCost, // Use the calculated finalTotalCost
+      discountPercentage: data.discountPercentage || 0,
     };
     
     updateWashRecord(washRecord.washId, updatedWashData);
 
     toast({
       title: "Wash Record Updated!",
-      description: `Record ${washRecord.washId} has been successfully updated.`,
+      description: `Record ${washRecord.washId} has been successfully updated. Final cost: $${finalTotalCost.toFixed(2)}`,
       className: "bg-accent text-accent-foreground"
     });
-    onFinished(); // Close the dialog or navigate away
+    onFinished(); 
   }
 
   return (
@@ -258,13 +272,61 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
           </Card>
         </CardContent>
 
-        <CardFooter className="flex flex-col items-center gap-4 pt-6 border-t sticky bottom-0 bg-background">
-          <div className="text-xl font-bold flex items-center gap-2">
-            <ShoppingCart className="h-6 w-6 text-primary" />
-            <span>Total Estimated Cost:</span>
-            <span className="text-primary">${totalCost.toFixed(2)}</span>
+        <CardFooter className="flex flex-col items-start gap-4 pt-6 border-t sticky bottom-0 bg-background">
+          <div className="w-full space-y-2">
+            <div className="text-md font-semibold flex justify-between">
+              <span>Subtotal:</span>
+              <span>${subtotal.toFixed(2)}</span>
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="discountPercentage"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="flex items-center gap-1">
+                        <Percent className="h-4 w-4 text-primary" /> Discount (%)
+                    </FormLabel>
+                    <FormControl className="w-24">
+                      <Input 
+                        type="number" 
+                        placeholder="0" 
+                        {...field} 
+                        onChange={e => {
+                            const val = e.target.value;
+                            if (val === "") {
+                                field.onChange(undefined); // Allow empty to be treated as 0 or optional by zod
+                            } else {
+                                field.onChange(parseFloat(val));
+                            }
+                        }}
+                        min="0"
+                        max="100"
+                        step="0.01"
+                      />
+                    </FormControl>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {discountAmount > 0 && (
+                <div className="text-md font-semibold flex justify-between text-green-600">
+                    <span>Discount Amount:</span>
+                    <span>-${discountAmount.toFixed(2)}</span>
+                </div>
+            )}
+            <Separator />
+            <div className="text-xl font-bold flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <ShoppingCart className="h-6 w-6 text-primary" />
+                    <span>Final Total Cost:</span>
+                </div>
+                <span className="text-primary">${finalTotalCost.toFixed(2)}</span>
+            </div>
           </div>
-          <Button type="submit" size="lg" className="w-full max-w-xs">
+          <Button type="submit" size="lg" className="w-full max-w-xs self-center">
             <Save className="mr-2 h-4 w-4" /> Save Changes
           </Button>
         </CardFooter>

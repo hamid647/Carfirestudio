@@ -28,6 +28,7 @@ export interface WashRecord {
   ownerNotes?: string;
   selectedServices: string[]; // Array of service IDs
   totalCost: number;
+  discountPercentage?: number; // Optional discount percentage
   createdAt: string; // ISO date string when the record was created
 }
 
@@ -41,3 +42,4 @@ export interface NotificationRecord {
   link?: string; // Optional link for navigation (e.g., /dashboard?tab=billing-requests&requestId=123)
   relatedRecordId?: string; // Optional: ID of the record this notification pertains to (e.g. washId or billingRequestId)
 }
+

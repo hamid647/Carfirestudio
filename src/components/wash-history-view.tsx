@@ -10,11 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import EditWashForm from '@/components/edit-wash-form'; // Corrected import path
+import EditWashForm from '@/components/edit-wash-form';
 import { format, parseISO } from 'date-fns';
-import { Trash2, Edit, History, Search, Eye } from 'lucide-react';
+import { Trash2, Edit, History, Search, Eye, Percent } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { WASH_SERVICES } from '@/config/services'; // Added for staff view details
+import { WASH_SERVICES } from '@/config/services'; 
 
 export default function WashHistoryView() {
   const { currentUser, washRecords, deleteWashRecord } = useAuth();
@@ -44,6 +44,46 @@ export default function WashHistoryView() {
   if (!currentUser) {
     return <p className="text-center py-10">Loading...</p>;
   }
+
+  const renderWashDetailsContent = (wash: WashRecord) => {
+    const washDate = parseISO(wash.createdAt);
+    const subtotal = wash.selectedServices.reduce((acc, serviceId) => {
+        const service = WASH_SERVICES.find(s => s.id === serviceId);
+        return acc + (service ? service.price : 0);
+    }, 0);
+    const discountApplied = wash.discountPercentage && wash.discountPercentage > 0;
+    const discountAmount = discountApplied ? subtotal * (wash.discountPercentage! / 100) : 0;
+    const finalCost = discountApplied ? subtotal - discountAmount : wash.totalCost; // Use wash.totalCost if no discount for legacy or clarity
+
+    return (
+        <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-3 py-4 text-left pr-4">
+                <p><strong>Car:</strong> {wash.carMake} {wash.carModel} ({wash.carYear})</p>
+                <p><strong>Condition:</strong> {wash.carCondition}</p>
+                <p><strong>Preferences:</strong> {wash.customerPreferences || 'N/A'}</p>
+                <p><strong>Selected Services:</strong></p>
+                <ul className="list-disc list-inside ml-4">
+                    {wash.selectedServices.map(serviceId => {
+                        const serviceDetails = WASH_SERVICES.find(s => s.id === serviceId);
+                        return <li key={serviceId}>{serviceDetails ? `${serviceDetails.name} ($${serviceDetails.price.toFixed(2)})` : serviceId}</li>;
+                    })}
+                </ul>
+                <p><strong>Notes for Owner:</strong> {wash.ownerNotes || 'N/A'}</p>
+                <hr className="my-2" />
+                {discountApplied ? (
+                    <>
+                        <p><strong>Subtotal:</strong> ${subtotal.toFixed(2)}</p>
+                        <p className="text-green-600"><strong>Discount ({wash.discountPercentage}%):</strong> -${discountAmount.toFixed(2)}</p>
+                        <p className="font-semibold"><strong>Final Total Cost:</strong> <span className="text-primary">${finalCost.toFixed(2)}</span></p>
+                    </>
+                ) : (
+                    <p className="font-semibold"><strong>Total Cost:</strong> <span className="text-primary">${wash.totalCost.toFixed(2)}</span></p>
+                )}
+                <p><strong>Date Created:</strong> {format(washDate, 'PPpp')}</p>
+            </div>
+        </ScrollArea>
+    );
+  };
 
   return (
     <Card className="w-full shadow-xl">
@@ -93,12 +133,17 @@ export default function WashHistoryView() {
                         {format(washDate, 'PPpp')}
                       </TableCell>
                       <TableCell>{wash.carMake} {wash.carModel} ({wash.carYear})</TableCell>
-                      <TableCell className="text-right">${wash.totalCost.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        ${wash.totalCost.toFixed(2)}
+                        {wash.discountPercentage && wash.discountPercentage > 0 && (
+                            <span className="text-xs text-green-600 ml-1 block">({wash.discountPercentage}% off)</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
                         {currentUser.role === 'owner' ? (
                           <div className="flex items-center justify-center gap-1">
                             <Dialog open={isEditDialogOpen && selectedWashToEdit?.washId === wash.washId} onOpenChange={(open) => {
-                                if (!open) setSelectedWashToEdit(null); // Clear selection on close
+                                if (!open) setSelectedWashToEdit(null); 
                                 setIsEditDialogOpen(open);
                             }}>
                               <DialogTrigger asChild>
@@ -107,7 +152,6 @@ export default function WashHistoryView() {
                                   <span className="sr-only">Edit</span>
                                 </Button>
                               </DialogTrigger>
-                              {/* Conditionally render content only when this specific item is selected for edit */}
                               {selectedWashToEdit && selectedWashToEdit.washId === wash.washId && (
                                 <DialogContent className="sm:max-w-2xl">
                                   <DialogHeader>
@@ -117,7 +161,7 @@ export default function WashHistoryView() {
                                     washRecord={selectedWashToEdit}
                                     onFinished={() => {
                                         setIsEditDialogOpen(false);
-                                        setSelectedWashToEdit(null); // Clear selection on finish
+                                        setSelectedWashToEdit(null); 
                                     }}
                                   />
                                   <DialogClose asChild>
@@ -161,23 +205,7 @@ export default function WashHistoryView() {
                                 <DialogHeader>
                                     <DialogTitle>Wash Details: {wash.washId}</DialogTitle>
                                 </DialogHeader>
-                                <ScrollArea className="max-h-[60vh]">
-                                  <div className="space-y-3 py-4 text-left pr-4">
-                                      <p><strong>Car:</strong> {wash.carMake} {wash.carModel} ({wash.carYear})</p>
-                                      <p><strong>Condition:</strong> {wash.carCondition}</p>
-                                      <p><strong>Preferences:</strong> {wash.customerPreferences || 'N/A'}</p>
-                                      <p><strong>Selected Services:</strong></p>
-                                      <ul className="list-disc list-inside ml-4">
-                                        {wash.selectedServices.map(serviceId => {
-                                          const serviceDetails = WASH_SERVICES.find(s => s.id === serviceId);
-                                          return <li key={serviceId}>{serviceDetails ? serviceDetails.name : serviceId}</li>;
-                                        })}
-                                      </ul>
-                                      <p><strong>Notes for Owner:</strong> {wash.ownerNotes || 'N/A'}</p>
-                                      <p className="font-semibold"><strong>Total Cost:</strong> <span className="text-primary">${wash.totalCost.toFixed(2)}</span></p>
-                                      <p><strong>Date Created:</strong> {format(washDate, 'PPpp')}</p>
-                                  </div>
-                                </ScrollArea>
+                                {renderWashDetailsContent(wash)}
                                 <DialogClose asChild>
                                     <Button type="button" variant="outline" className="mt-4 w-full">Close</Button>
                                 </DialogClose>

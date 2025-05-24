@@ -168,7 +168,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     // Notify Owner
     addNotification({
-      userId: MOCK_USERS.owner.id, // Target specific owner
+      userId: MOCK_USERS.owner.id, 
       roleTarget: 'owner',
       message: `New billing change request (#${newRequest.id.substring(0,6)}) for Wash ID ${newRequest.washId} submitted by ${currentUser.username}.`,
       read: false,
@@ -202,11 +202,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return updatedRequests;
     });
 
-    // Notify Staff (generic staff notification for now)
     if (staffToNotifyId && originalRequestWashId) {
        addNotification({
-        userId: staffToNotifyId, // This would target a specific staff if we had individual staff users
-        roleTarget: 'staff', // Fallback for generic staff
+        userId: staffToNotifyId, 
+        roleTarget: 'staff', 
         message: `Your billing change request (#${requestId.substring(0,6)}) for Wash ID ${originalRequestWashId} has been ${status}.`,
         read: false,
         relatedRecordId: requestId,
@@ -220,9 +219,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ...recordData,
       washId: `WASH-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       createdAt: new Date().toISOString(),
+      discountPercentage: recordData.discountPercentage || 0, // Ensure discount is initialized
     };
     setWashRecords(prevRecords => {
-      const updatedRecords = [newRecord, ...prevRecords]; // Add to the beginning for recent first
+      const updatedRecords = [newRecord, ...prevRecords]; 
       try {
         localStorage.setItem('washRecords', JSON.stringify(updatedRecords));
       } catch (error) {
@@ -239,7 +239,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     setWashRecords(prevRecords => {
       const updatedRecords = prevRecords.map(record =>
-        record.washId === washId ? { ...record, ...updatedData } : record
+        record.washId === washId ? { ...record, ...updatedData, discountPercentage: updatedData.discountPercentage ?? record.discountPercentage } : record
       );
       try {
         localStorage.setItem('washRecords', JSON.stringify(updatedRecords));
@@ -291,3 +291,4 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
