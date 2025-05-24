@@ -24,9 +24,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { SERVICE_CATEGORIES } from "@/config/services"; // Keep for categories
 import type { WashRecord } from "@/types";
-import { Car, ListChecks, ShoppingCart, MessageSquare, Save, Percent } from "lucide-react";
+import { Car, ListChecks, ShoppingCart, MessageSquare, Save, Percent, User as UserIcon } from "lucide-react";
 
 const editWashFormSchema = z.object({
+  customerName: z.string().min(2, { message: "Customer name must be at least 2 characters." }),
   carMake: z.string().min(2, { message: "Car make must be at least 2 characters." }),
   carModel: z.string().min(1, { message: "Car model is required." }),
   carYear: z.coerce.number().min(1900, { message: "Invalid year." }).max(new Date().getFullYear() + 1, { message: "Invalid year." }),
@@ -57,6 +58,7 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
   const form = useForm<EditWashFormData>({
     resolver: zodResolver(editWashFormSchema),
     defaultValues: {
+      customerName: washRecord.customerName,
       carMake: washRecord.carMake,
       carModel: washRecord.carModel,
       carYear: washRecord.carYear,
@@ -104,7 +106,7 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
 
     toast({
       title: "Wash Record Updated!",
-      description: `Record ${washRecord.washId} has been successfully updated. Final cost: $${finalTotalCost.toFixed(2)}`,
+      description: `Record ${washRecord.washId} for ${data.customerName} has been successfully updated. Final cost: $${finalTotalCost.toFixed(2)}`,
       className: "bg-accent text-accent-foreground"
     });
     onFinished(); 
@@ -117,11 +119,24 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Car className="h-6 w-6 text-primary" />
-                <CardTitle className="text-xl">Car Details</CardTitle>
+                <UserIcon className="h-6 w-6 text-primary" />
+                <CardTitle className="text-xl">Customer & Car Details</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+              <FormField
+                control={form.control}
+                name="customerName"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Customer Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., John Doe" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="carMake"

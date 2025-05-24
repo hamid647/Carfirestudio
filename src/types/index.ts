@@ -20,6 +20,7 @@ export interface BillingChangeRequest {
 // Defines the structure for a car wash record
 export interface WashRecord {
   washId: string; // Unique ID for the wash, typically generated with a timestamp
+  customerName: string; // Added customer name
   carMake: string;
   carModel: string;
   carYear: number;

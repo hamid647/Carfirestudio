@@ -26,9 +26,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { suggestServices, type SuggestServicesInput, type SuggestServicesOutput } from "@/ai/flows/suggest-services";
 import { SERVICE_CATEGORIES } from "@/config/services"; // Keep for categories
 import type { WashRecord } from "@/types"; 
-import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText, MessageSquare } from "lucide-react";
+import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText, MessageSquare, User as UserIcon } from "lucide-react";
 
 const washFormSchema = z.object({
+  customerName: z.string().min(2, { message: "Customer name must be at least 2 characters." }),
   carMake: z.string().min(2, { message: "Car make must be at least 2 characters." }),
   carModel: z.string().min(1, { message: "Car model is required." }),
   carYear: z.coerce.number().min(1900, { message: "Invalid year." }).max(new Date().getFullYear() + 1, { message: "Invalid year." }),
@@ -53,6 +54,7 @@ export default function WashForm() {
   const form = useForm<WashFormData>({
     resolver: zodResolver(washFormSchema),
     defaultValues: {
+      customerName: "",
       carMake: "",
       carModel: "",
       carYear: new Date().getFullYear(),
@@ -124,7 +126,7 @@ export default function WashForm() {
       title: "Wash Request Submitted!",
       description: (
         <div>
-          <p>Successfully added to wash history.</p>
+          <p>Successfully added to wash history for {data.customerName}.</p>
           <p>Total Cost: ${totalCost.toFixed(2)}</p>
           {data.ownerNotes && <p>Notes: {data.ownerNotes}</p>}
         </div>
@@ -143,7 +145,7 @@ export default function WashForm() {
           <FileText className="h-8 w-8 text-primary" />
           <CardTitle className="text-3xl font-bold">New Wash Request</CardTitle>
         </div>
-        <CardDescription>Enter car details, select services, and get AI-powered recommendations.</CardDescription>
+        <CardDescription>Enter customer & car details, select services, and get AI-powered recommendations.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -151,11 +153,24 @@ export default function WashForm() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Car className="h-6 w-6 text-primary" />
-                  <CardTitle className="text-xl">Car Details</CardTitle>
+                  <UserIcon className="h-6 w-6 text-primary" />
+                  <CardTitle className="text-xl">Customer & Car Details</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+                <FormField
+                  control={form.control}
+                  name="customerName"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Customer Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., John Doe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="carMake"

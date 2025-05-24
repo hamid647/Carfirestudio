@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import EditWashForm from '@/components/edit-wash-form';
 import { format, parseISO } from 'date-fns';
-import { Trash2, Edit, History, Search, Eye, Percent } from 'lucide-react';
+import { Trash2, Edit, History, Search, Eye, User as UserIcon } from 'lucide-react'; // Added UserIcon
 import { Input } from '@/components/ui/input';
 // No longer importing static WASH_SERVICES, will get from useAuth
 
@@ -25,6 +25,7 @@ export default function WashHistoryView() {
   const recordsToDisplay = washRecords
     .filter(record =>
       record.washId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || // Search by customer name
       record.carMake.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.carModel.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (record.carYear && record.carYear.toString().includes(searchTerm))
@@ -58,6 +59,7 @@ export default function WashHistoryView() {
     return (
         <ScrollArea className="max-h-[60vh]">
             <div className="space-y-3 py-4 text-left pr-4">
+                <p><strong>Customer:</strong> {wash.customerName}</p>
                 <p><strong>Car:</strong> {wash.carMake} {wash.carModel} ({wash.carYear})</p>
                 <p><strong>Condition:</strong> {wash.carCondition}</p>
                 <p><strong>Preferences:</strong> {wash.customerPreferences || 'N/A'}</p>
@@ -97,7 +99,7 @@ export default function WashHistoryView() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search by ID, Make, Model, Year..."
+              placeholder="Search by ID, Name, Make, Model, Year..."
               className="pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -117,6 +119,7 @@ export default function WashHistoryView() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">Wash ID</TableHead>
+                  <TableHead>Customer</TableHead> {/* Added Customer column */}
                   <TableHead>Date</TableHead>
                   <TableHead>Car</TableHead>
                   <TableHead className="text-right">Total Cost</TableHead>
@@ -129,6 +132,7 @@ export default function WashHistoryView() {
                   return (
                     <TableRow key={wash.washId}>
                       <TableCell className="font-medium">{wash.washId}</TableCell>
+                      <TableCell>{wash.customerName}</TableCell> {/* Display Customer Name */}
                       <TableCell>
                         {format(washDate, 'PPpp')}
                       </TableCell>
@@ -181,7 +185,7 @@ export default function WashHistoryView() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the wash record <span className="font-semibold">{wash.washId}</span>.
+                                    This action cannot be undone. This will permanently delete the wash record <span className="font-semibold">{wash.washId}</span> for {wash.customerName}.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
