@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { WASH_SERVICES, SERVICE_CATEGORIES } from "@/config/services";
+import { SERVICE_CATEGORIES } from "@/config/services"; // Keep for categories
 import type { WashRecord } from "@/types";
 import { Car, ListChecks, ShoppingCart, MessageSquare, Save, Percent } from "lucide-react";
 
@@ -48,7 +48,7 @@ interface EditWashFormProps {
 
 export default function EditWashForm({ washRecord, onFinished }: EditWashFormProps) {
   const { toast } = useToast();
-  const { updateWashRecord, currentUser } = useAuth();
+  const { updateWashRecord, currentUser, services: WASH_SERVICES } = useAuth(); // Get services from context
   
   const [subtotal, setSubtotal] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -85,7 +85,7 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
     const currentFinalTotal = currentSubtotal - currentDiscountAmount;
     setFinalTotalCost(currentFinalTotal);
 
-  }, [selectedServiceIds, discountInputPercentage]);
+  }, [selectedServiceIds, discountInputPercentage, WASH_SERVICES]);
 
   function onSubmit(data: EditWashFormData) {
     if (currentUser?.role !== 'owner') {
@@ -96,7 +96,7 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
     const updatedWashData: Partial<Omit<WashRecord, 'washId' | 'createdAt'>> = {
       ...data,
       carYear: Number(data.carYear),
-      totalCost: finalTotalCost, // Use the calculated finalTotalCost
+      totalCost: finalTotalCost, 
       discountPercentage: data.discountPercentage || 0,
     };
     
@@ -218,52 +218,58 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
                 name="selectedServices"
                 render={() => (
                   <FormItem className="space-y-4">
-                    {SERVICE_CATEGORIES.map(category => (
-                      <div key={category}>
-                        <h3 className="text-lg font-semibold mb-2 text-primary/80">{category}</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {WASH_SERVICES.filter(s => s.category === category).map((service) => (
-                          <FormField
-                            key={service.id}
-                            control={form.control}
-                            name="selectedServices"
-                            render={({ field }) => (
-                              <FormItem
-                                key={service.id}
-                                className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 hover:bg-muted/50 transition-colors"
-                              >
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value?.includes(service.id)}
-                                    onCheckedChange={(checked) => {
-                                      return checked
-                                        ? field.onChange([...(field.value || []), service.id])
-                                        : field.onChange(
-                                            (field.value || []).filter(
-                                              (value) => value !== service.id
-                                            )
-                                          );
-                                    }}
-                                  />
-                                </FormControl>
-                                <div className="space-y-1 leading-none">
-                                  <FormLabel className="font-normal cursor-pointer">
-                                    {service.name} - ${service.price.toFixed(2)}
-                                  </FormLabel>
-                                  {service.description && (
-                                    <FormDescription className="text-xs">
-                                      {service.description}
-                                    </FormDescription>
-                                  )}
-                                </div>
-                              </FormItem>
-                            )}
-                          />
-                        ))}
+                    {WASH_SERVICES.length === 0 && <p className="text-muted-foreground">No services available. Please contact an owner to add services.</p>}
+                    {SERVICE_CATEGORIES.map(category => {
+                      const servicesInCategory = WASH_SERVICES.filter(s => s.category === category);
+                      if (servicesInCategory.length === 0) return null;
+
+                      return (
+                        <div key={category}>
+                          <h3 className="text-lg font-semibold mb-2 text-primary/80">{category}</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {servicesInCategory.map((service) => (
+                            <FormField
+                              key={service.id}
+                              control={form.control}
+                              name="selectedServices"
+                              render={({ field }) => (
+                                <FormItem
+                                  key={service.id}
+                                  className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 hover:bg-muted/50 transition-colors"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(service.id)}
+                                      onCheckedChange={(checked) => {
+                                        return checked
+                                          ? field.onChange([...(field.value || []), service.id])
+                                          : field.onChange(
+                                              (field.value || []).filter(
+                                                (value) => value !== service.id
+                                              )
+                                            );
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <div className="space-y-1 leading-none">
+                                    <FormLabel className="font-normal cursor-pointer">
+                                      {service.name} - ${service.price.toFixed(2)}
+                                    </FormLabel>
+                                    {service.description && (
+                                      <FormDescription className="text-xs">
+                                        {service.description}
+                                      </FormDescription>
+                                    )}
+                                  </div>
+                                </FormItem>
+                              )}
+                            />
+                          ))}
+                          </div>
+                          {category !== SERVICE_CATEGORIES[SERVICE_CATEGORIES.length - 1] && <Separator className="my-6"/>}
                         </div>
-                        {category !== SERVICE_CATEGORIES[SERVICE_CATEGORIES.length - 1] && <Separator className="my-6"/>}
-                      </div>
-                    ))}
+                      )
+                    })}
                     <FormMessage>{form.formState.errors.selectedServices?.message}</FormMessage>
                   </FormItem>
                 )}
@@ -296,7 +302,7 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
                         onChange={e => {
                             const val = e.target.value;
                             if (val === "") {
-                                field.onChange(undefined); // Allow empty to be treated as 0 or optional by zod
+                                field.onChange(undefined); 
                             } else {
                                 field.onChange(parseFloat(val));
                             }
@@ -326,7 +332,7 @@ export default function EditWashForm({ washRecord, onFinished }: EditWashFormPro
                 <span className="text-primary">${finalTotalCost.toFixed(2)}</span>
             </div>
           </div>
-          <Button type="submit" size="lg" className="w-full max-w-xs self-center">
+          <Button type="submit" size="lg" className="w-full max-w-xs self-center" disabled={WASH_SERVICES.length === 0}>
             <Save className="mr-2 h-4 w-4" /> Save Changes
           </Button>
         </CardFooter>

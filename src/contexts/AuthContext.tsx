@@ -1,7 +1,8 @@
 
 "use client";
 
-import type { Role, User, BillingChangeRequest, WashRecord, NotificationRecord } from '@/types';
+import type { Role, User, BillingChangeRequest, WashRecord, NotificationRecord, Service } from '@/types';
+import { INITIAL_SERVICES, type ServiceCategory } from '@/config/services'; // Import INITIAL_SERVICES
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
 export interface AuthContextType {
@@ -21,6 +22,10 @@ export interface AuthContextType {
   markNotificationAsRead: (notificationId: string) => void;
   markAllNotificationsAsRead: () => void;
   getUnreadNotificationCount: () => number;
+  services: Service[];
+  addService: (serviceData: Omit<Service, 'id'>) => void;
+  updateService: (serviceId: string, updatedData: Partial<Omit<Service, 'id'>>) => void;
+  deleteService: (serviceId: string) => void;
   isLoading: boolean;
 }
 
@@ -40,6 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [billingRequests, setBillingRequests] = useState<BillingChangeRequest[]>([]);
   const [washRecords, setWashRecords] = useState<WashRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -60,12 +66,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (storedNotifications) {
         setNotifications(JSON.parse(storedNotifications));
       }
+      const storedServices = localStorage.getItem('services');
+      if (storedServices) {
+        setServices(JSON.parse(storedServices));
+      } else {
+        setServices(INITIAL_SERVICES); // Initialize with default services if none in localStorage
+        localStorage.setItem('services', JSON.stringify(INITIAL_SERVICES));
+      }
     } catch (error) {
       console.error("Failed to load from localStorage", error);
+       // Fallback to initial services if localStorage parsing fails for services
+      if (services.length === 0) {
+        setServices(INITIAL_SERVICES);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // services removed from dependency array to prevent re-initialization loop
 
   const login = useCallback((role: Role) => {
     const userToLogin = MOCK_USERS[role];
@@ -166,7 +183,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return updatedRequests;
     });
 
-    // Notify Owner
     addNotification({
       userId: MOCK_USERS.owner.id, 
       roleTarget: 'owner',
@@ -219,7 +235,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ...recordData,
       washId: `WASH-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       createdAt: new Date().toISOString(),
-      discountPercentage: recordData.discountPercentage || 0, // Ensure discount is initialized
+      discountPercentage: recordData.discountPercentage || 0,
     };
     setWashRecords(prevRecords => {
       const updatedRecords = [newRecord, ...prevRecords]; 
@@ -266,6 +282,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
   }, [currentUser]);
 
+  // Service CRUD
+  const addService = useCallback((serviceData: Omit<Service, 'id'>) => {
+    if (!currentUser || currentUser.role !== 'owner') return;
+    const newService: Service = {
+      ...serviceData,
+      id: `SERVICE-${Date.now()}-${Math.random().toString(36).substring(2,5).toUpperCase()}`
+    };
+    setServices(prev => {
+      const updated = [...prev, newService];
+      localStorage.setItem('services', JSON.stringify(updated));
+      return updated;
+    });
+  }, [currentUser]);
+
+  const updateService = useCallback((serviceId: string, updatedData: Partial<Omit<Service, 'id'>>) => {
+    if (!currentUser || currentUser.role !== 'owner') return;
+    setServices(prev => {
+      const updated = prev.map(s => s.id === serviceId ? { ...s, ...updatedData } : s);
+      localStorage.setItem('services', JSON.stringify(updated));
+      return updated;
+    });
+  }, [currentUser]);
+
+  const deleteService = useCallback((serviceId: string) => {
+    if (!currentUser || currentUser.role !== 'owner') return;
+    setServices(prev => {
+      const updated = prev.filter(s => s.id !== serviceId);
+      localStorage.setItem('services', JSON.stringify(updated));
+      return updated;
+    });
+  }, [currentUser]);
 
   return (
     <AuthContext.Provider value={{ 
@@ -285,10 +332,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       markNotificationAsRead,
       markAllNotificationsAsRead,
       getUnreadNotificationCount,
+      services,
+      addService,
+      updateService,
+      deleteService,
       isLoading 
     }}>
       {children}
     </AuthContext.Provider>
   );
 };
-

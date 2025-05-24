@@ -1,3 +1,4 @@
+
 export interface Service {
   id: string;
   name: string;
@@ -6,7 +7,8 @@ export interface Service {
   category: 'Wash' | 'Detailing' | 'Additional' | 'Package';
 }
 
-export const WASH_SERVICES: Service[] = [
+// This will be the default set of services if none are found in localStorage
+export const INITIAL_SERVICES: Service[] = [
   { 
     id: 'basic_wash', 
     name: 'Basic Wash', 
@@ -59,17 +61,18 @@ export const WASH_SERVICES: Service[] = [
   { 
     id: 'package_basic_plus', 
     name: 'Package: Basic Wash + Tire Shine', 
-    price: 22, // 15 + 10 = 25, discounted
+    price: 22, 
     description: 'Basic wash with tire shine application.',
     category: 'Package'
   },
   { 
     id: 'package_premium_detail', 
     name: 'Package: Premium Wash + Wax', 
-    price: 75, // 30 + 50 = 80, discounted
+    price: 75, 
     description: 'Premium wash combined with hand wax application.',
     category: 'Package'
   },
 ];
 
 export const SERVICE_CATEGORIES = ['Wash', 'Detailing', 'Additional', 'Package'] as const;
+export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number];

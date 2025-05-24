@@ -14,10 +14,10 @@ import EditWashForm from '@/components/edit-wash-form';
 import { format, parseISO } from 'date-fns';
 import { Trash2, Edit, History, Search, Eye, Percent } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { WASH_SERVICES } from '@/config/services'; 
+// No longer importing static WASH_SERVICES, will get from useAuth
 
 export default function WashHistoryView() {
-  const { currentUser, washRecords, deleteWashRecord } = useAuth();
+  const { currentUser, washRecords, deleteWashRecord, services: WASH_SERVICES } = useAuth(); // Get services from context
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedWashToEdit, setSelectedWashToEdit] = useState<WashRecord | null>(null);
@@ -53,7 +53,7 @@ export default function WashHistoryView() {
     }, 0);
     const discountApplied = wash.discountPercentage && wash.discountPercentage > 0;
     const discountAmount = discountApplied ? subtotal * (wash.discountPercentage! / 100) : 0;
-    const finalCost = discountApplied ? subtotal - discountAmount : wash.totalCost; // Use wash.totalCost if no discount for legacy or clarity
+    const finalCost = discountApplied ? subtotal - discountAmount : wash.totalCost; 
 
     return (
         <ScrollArea className="max-h-[60vh]">

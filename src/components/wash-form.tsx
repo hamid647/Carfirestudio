@@ -22,10 +22,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth"; // Import useAuth
+import { useAuth } from "@/hooks/useAuth"; 
 import { suggestServices, type SuggestServicesInput, type SuggestServicesOutput } from "@/ai/flows/suggest-services";
-import { WASH_SERVICES, SERVICE_CATEGORIES } from "@/config/services";
-import type { WashRecord } from "@/types"; // Import WashRecord type
+import { SERVICE_CATEGORIES } from "@/config/services"; // Keep for categories
+import type { WashRecord } from "@/types"; 
 import { Car, Sparkles, Bot, AlertCircle, ShoppingCart, Loader2, ListChecks, FileText, MessageSquare } from "lucide-react";
 
 const washFormSchema = z.object({
@@ -44,7 +44,7 @@ type WashFormData = z.infer<typeof washFormSchema>;
 
 export default function WashForm() {
   const { toast } = useToast();
-  const { addWashRecord } = useAuth(); // Get addWashRecord from context
+  const { addWashRecord, services: WASH_SERVICES } = useAuth(); // Get services from context
   const [isPending, startTransition] = useTransition();
   const [aiSuggestions, setAiSuggestions] = useState<SuggestServicesOutput | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export default function WashForm() {
       return acc + (service ? service.price : 0);
     }, 0);
     setTotalCost(cost);
-  }, [selectedServiceIds]);
+  }, [selectedServiceIds, WASH_SERVICES]);
 
   const handleAiSuggest = async () => {
     const carDetails = `Make: ${form.getValues("carMake")}, Model: ${form.getValues("carModel")}, Year: ${form.getValues("carYear")}, Condition: ${form.getValues("carCondition")}`;
@@ -113,11 +113,12 @@ export default function WashForm() {
   function onSubmit(data: WashFormData) {
     const washDataForRecord: Omit<WashRecord, 'washId' | 'createdAt'> = {
       ...data,
-      carYear: Number(data.carYear), // Ensure carYear is a number
+      carYear: Number(data.carYear), 
       totalCost,
+      discountPercentage: 0, // New washes have no discount by default
     };
     
-    addWashRecord(washDataForRecord); // Use context function
+    addWashRecord(washDataForRecord); 
 
     toast({
       title: "Wash Request Submitted!",
@@ -132,7 +133,7 @@ export default function WashForm() {
     });
     form.reset();
     setAiSuggestions(null);
-    setTotalCost(0); // Reset total cost
+    setTotalCost(0); 
   }
 
   return (
@@ -300,54 +301,60 @@ export default function WashForm() {
                   name="selectedServices"
                   render={() => (
                     <FormItem className="space-y-4">
-                      {SERVICE_CATEGORIES.map(category => (
-                        <div key={category}>
-                          <h3 className="text-lg font-semibold mb-2 text-primary/80">{category}</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {WASH_SERVICES.filter(s => s.category === category).map((service) => (
-                            <FormField
-                              key={service.id}
-                              control={form.control}
-                              name="selectedServices"
-                              render={({ field }) => {
-                                return (
-                                  <FormItem
-                                    key={service.id}
-                                    className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 hover:bg-muted/50 transition-colors"
-                                  >
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(service.id)}
-                                        onCheckedChange={(checked) => {
-                                          return checked
-                                            ? field.onChange([...(field.value || []), service.id])
-                                            : field.onChange(
-                                                (field.value || []).filter(
-                                                  (value) => value !== service.id
-                                                )
-                                              );
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                      <FormLabel className="font-normal cursor-pointer">
-                                        {service.name} - ${service.price.toFixed(2)}
-                                      </FormLabel>
-                                      {service.description && (
-                                        <FormDescription className="text-xs">
-                                          {service.description}
-                                        </FormDescription>
-                                      )}
-                                    </div>
-                                  </FormItem>
-                                );
-                              }}
-                            />
-                          ))}
+                      {WASH_SERVICES.length === 0 && <p className="text-muted-foreground">No services available. Please contact an owner to add services.</p>}
+                      {SERVICE_CATEGORIES.map(category => {
+                        const servicesInCategory = WASH_SERVICES.filter(s => s.category === category);
+                        if (servicesInCategory.length === 0) return null;
+                        
+                        return (
+                          <div key={category}>
+                            <h3 className="text-lg font-semibold mb-2 text-primary/80">{category}</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {servicesInCategory.map((service) => (
+                              <FormField
+                                key={service.id}
+                                control={form.control}
+                                name="selectedServices"
+                                render={({ field }) => {
+                                  return (
+                                    <FormItem
+                                      key={service.id}
+                                      className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 hover:bg-muted/50 transition-colors"
+                                    >
+                                      <FormControl>
+                                        <Checkbox
+                                          checked={field.value?.includes(service.id)}
+                                          onCheckedChange={(checked) => {
+                                            return checked
+                                              ? field.onChange([...(field.value || []), service.id])
+                                              : field.onChange(
+                                                  (field.value || []).filter(
+                                                    (value) => value !== service.id
+                                                  )
+                                                );
+                                          }}
+                                        />
+                                      </FormControl>
+                                      <div className="space-y-1 leading-none">
+                                        <FormLabel className="font-normal cursor-pointer">
+                                          {service.name} - ${service.price.toFixed(2)}
+                                        </FormLabel>
+                                        {service.description && (
+                                          <FormDescription className="text-xs">
+                                            {service.description}
+                                          </FormDescription>
+                                        )}
+                                      </div>
+                                    </FormItem>
+                                  );
+                                }}
+                              />
+                            ))}
+                            </div>
+                            {category !== SERVICE_CATEGORIES[SERVICE_CATEGORIES.length -1] && <Separator className="my-6"/>}
                           </div>
-                          {category !== SERVICE_CATEGORIES[SERVICE_CATEGORIES.length -1] && <Separator className="my-6"/>}
-                        </div>
-                      ))}
+                        )
+                      })}
                       <FormMessage>{form.formState.errors.selectedServices?.message}</FormMessage>
                     </FormItem>
                   )}
@@ -362,7 +369,7 @@ export default function WashForm() {
               <span>Total Estimated Cost:</span>
               <span className="text-primary">${totalCost.toFixed(2)}</span>
             </div>
-            <Button type="submit" size="lg" className="w-full max-w-xs">
+            <Button type="submit" size="lg" className="w-full max-w-xs" disabled={WASH_SERVICES.length === 0}>
               Submit Wash Request
             </Button>
           </CardFooter>

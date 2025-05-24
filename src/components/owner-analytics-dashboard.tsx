@@ -3,8 +3,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { WASH_SERVICES, SERVICE_CATEGORIES, type Service } from '@/config/services';
-import type { WashRecord } from '@/types';
+import { SERVICE_CATEGORIES, type ServiceCategory } from '@/config/services'; // Keep for categories
+import type { WashRecord, Service } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -32,7 +32,7 @@ const CHART_COLORS = [
 ];
 
 export default function OwnerAnalyticsDashboard() {
-  const { washRecords } = useAuth();
+  const { washRecords, services: WASH_SERVICES } = useAuth(); // Get services from context
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('7days');
 
   const filteredWashRecords = useMemo(() => {
@@ -107,11 +107,11 @@ export default function OwnerAnalyticsDashboard() {
         return { name: serviceInfo?.name || id, value: count };
       })
       .sort((a, b) => b.value - a.value)
-      .slice(0, 7); // Top 7 services
-  }, [filteredWashRecords]);
+      .slice(0, 7); 
+  }, [filteredWashRecords, WASH_SERVICES]);
 
   const revenueByCategoryData = useMemo(() => {
-    const dailyCategoryRevenue: Record<string, Record<string, number>> = {}; // date -> category -> revenue
+    const dailyCategoryRevenue: Record<string, Record<string, number>> = {}; 
 
     filteredWashRecords.forEach(record => {
         const dateStr = format(parseISO(record.createdAt), 'yyyy-MM-dd');
@@ -122,7 +122,12 @@ export default function OwnerAnalyticsDashboard() {
         record.selectedServices.forEach(serviceId => {
             const service = WASH_SERVICES.find(s => s.id === serviceId);
             if (service) {
-                dailyCategoryRevenue[dateStr][service.category] = (dailyCategoryRevenue[dateStr][service.category] || 0) + service.price;
+                // Calculate price after discount for this specific service if overall record has discount
+                let servicePrice = service.price;
+                if (record.discountPercentage && record.discountPercentage > 0) {
+                    servicePrice = service.price * (1 - (record.discountPercentage / 100));
+                }
+                dailyCategoryRevenue[dateStr][service.category] = (dailyCategoryRevenue[dateStr][service.category] || 0) + servicePrice;
             }
         });
     });
@@ -134,14 +139,14 @@ export default function OwnerAnalyticsDashboard() {
 
     return daysToDisplay.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const revenues = { date: format(day, 'MMM d') };
+        const revenues = { date: format(day, 'MMM d') } as {date: string} & Record<ServiceCategory, number>;
         SERVICE_CATEGORIES.forEach(cat => {
             revenues[cat] = dailyCategoryRevenue[dateStr]?.[cat] || 0;
         });
         return revenues;
     }).sort((a,b) => parseISO(Object.keys(dailyCategoryRevenue).find(d => format(parseISO(d),'MMM d') === a.date) || new Date(0).toISOString())
                         .getTime() - parseISO(Object.keys(dailyCategoryRevenue).find(d => format(parseISO(d),'MMM d') === b.date) || new Date(0).toISOString()).getTime());
-  }, [filteredWashRecords, timeFilter]);
+  }, [filteredWashRecords, timeFilter, WASH_SERVICES]);
 
 
   const salesChartConfig = {
@@ -206,8 +211,8 @@ export default function OwnerAnalyticsDashboard() {
               <LineChart data={salesTrendData} margin={{ left: 12, right: 12, top: 5, bottom: 5 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-                <YAxis tickFormatter={(value) => `$${value}`} />
-                <Tooltip content={<ChartTooltipContent indicator="line" />} />
+                <YAxis tickFormatter={(value) => `$${value.toFixed(0)}`} />
+                <Tooltip content={<ChartTooltipContent indicator="line" formatter={(value) => typeof value === 'number' ? `$${value.toFixed(2)}` : value} />} />
                 <Line dataKey="sales" type="monotone" stroke="var(--color-sales)" strokeWidth={2} dot={false} />
               </LineChart>
             </ChartContainer>
@@ -245,7 +250,7 @@ export default function OwnerAnalyticsDashboard() {
                 <PieChartIcon className="h-6 w-6 text-primary" />
                 <CardTitle>Top Services Availed</CardTitle>
             </div>
-            <CardDescription>Distribution of the most popular services.</CardDescription>
+            <CardDescription>Distribution of the most popular services by count.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
             {topServicesData.length > 0 ? (
@@ -270,15 +275,15 @@ export default function OwnerAnalyticsDashboard() {
                 <BarChart3 className="h-6 w-6 text-primary" />
                 <CardTitle>Daily Revenue by Service Category</CardTitle>
             </div>
-            <CardDescription>Breakdown of daily revenue by service category.</CardDescription>
+            <CardDescription>Breakdown of daily revenue by service category (discounts applied).</CardDescription>
           </CardHeader>
           <CardContent>
              <ChartContainer config={categoryChartConfig} className="h-[300px] w-full">
                 <BarChart data={revenueByCategoryData} margin={{ top: 5, bottom: 5 }}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-                    <YAxis tickFormatter={(value) => `$${value}`} />
-                    <Tooltip content={<ChartTooltipContent />} />
+                    <YAxis tickFormatter={(value) => `$${value.toFixed(0)}`} />
+                    <Tooltip content={<ChartTooltipContent formatter={(value, name) => ({ value: typeof value === 'number' ? `$${value.toFixed(2)}` : value, name})}/>} />
                     <ChartLegend content={<ChartLegendContent />} />
                     {SERVICE_CATEGORIES.map((category, index) => (
                         <Bar key={category} dataKey={category} stackId="a" fill={`var(--color-${category})`} radius={[4,4,0,0]} />
@@ -291,4 +296,3 @@ export default function OwnerAnalyticsDashboard() {
     </div>
   );
 }
-
