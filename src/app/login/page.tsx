@@ -8,18 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from '@/hooks/useAuth';
 import { User, LogIn } from 'lucide-react';
 
-export default function LoginPage() {
-  const { login, isAuthenticated, isLoading } = useAuth();
+export default function RoleSelectionPage() {
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (isAuthenticated) {
+    if (!isLoading && isAuthenticated) {
       router.push('/dashboard');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  const handleLogin = (role: 'owner' | 'staff') => {
-    login(role);
+  const handleRoleSelect = (role: 'owner' | 'staff') => {
+    router.push(`/login/${role}`);
   };
 
   if (isLoading || isAuthenticated) {
@@ -43,24 +43,24 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <LogIn className="mx-auto h-12 w-12 text-primary" />
-          <CardTitle className="text-3xl font-bold mt-2">Welcome Back!</CardTitle>
-          <CardDescription>Please select your role to continue.</CardDescription>
+          <CardTitle className="text-3xl font-bold mt-2">Select Your Role</CardTitle>
+          <CardDescription>Please select your role to proceed to login.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 p-8">
           <Button
-            onClick={() => handleLogin('owner')}
+            onClick={() => handleRoleSelect('owner')}
             className="w-full py-3 text-lg"
             size="lg"
           >
-            <User className="mr-2 h-5 w-5" /> Login as Owner
+            <User className="mr-2 h-5 w-5" /> Continue as Owner
           </Button>
           <Button
-            onClick={() => handleLogin('staff')}
+            onClick={() => handleRoleSelect('staff')}
             variant="secondary"
             className="w-full py-3 text-lg"
             size="lg"
           >
-            <User className="mr-2 h-5 w-5" /> Login as Staff
+            <User className="mr-2 h-5 w-5" /> Continue as Staff
           </Button>
         </CardContent>
       </Card>
@@ -70,4 +70,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

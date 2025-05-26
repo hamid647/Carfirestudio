@@ -4,7 +4,9 @@ export type Role = 'owner' | 'staff';
 export interface User {
   id: string;
   username: string;
+  email: string; // Added email
   role: Role;
+  token?: string; // Added token
 }
 
 export interface BillingChangeRequest {
@@ -20,7 +22,7 @@ export interface BillingChangeRequest {
 // Defines the structure for a car wash record
 export interface WashRecord {
   washId: string; // Unique ID for the wash, typically generated with a timestamp
-  customerName: string; // Added customer name
+  customerName: string;
   carMake: string;
   carModel: string;
   carYear: number;
@@ -43,4 +45,7 @@ export interface NotificationRecord {
   link?: string; // Optional link for navigation (e.g., /dashboard?tab=billing-requests&requestId=123)
   relatedRecordId?: string; // Optional: ID of the record this notification pertains to (e.g. washId or billingRequestId)
 }
+
+// Service type from config/services
+export type { Service, ServiceCategory } from '@/config/services';
 
