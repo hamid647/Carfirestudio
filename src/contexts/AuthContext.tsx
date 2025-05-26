@@ -16,7 +16,8 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
-  where
+  where,
+  writeBatch
 } from 'firebase/firestore';
 
 export interface AuthContextType {
@@ -49,17 +50,21 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// MOCK_OWNER_FOR_NOTIFICATIONS can be used if notifications need to target an owner ID
-// For now, notifications will just store a roleTarget or a userId if currentUser exists.
-const MOCK_OWNER_ID_FOR_NOTIFICATIONS = 'owner-001'; // A placeholder ID
+const MOCK_OWNER_ID_FOR_NOTIFICATIONS = 'owner-001'; 
 
-const convertFirestoreTimestamp = (data: any) => {
-  for (const key in data) {
-    if (data[key] instanceof Timestamp) {
-      data[key] = data[key].toDate().toISOString();
-    } else if (typeof data[key] === 'object' && data[key] !== null) {
-      convertFirestoreTimestamp(data[key]); // Recursively convert nested objects
+const convertFirestoreTimestamp = (data: any): any => {
+  if (data instanceof Timestamp) {
+    return data.toDate().toISOString();
+  }
+  if (Array.isArray(data)) {
+    return data.map(item => convertFirestoreTimestamp(item));
+  }
+  if (typeof data === 'object' && data !== null) {
+    const res: { [key: string]: any } = {};
+    for (const key in data) {
+      res[key] = convertFirestoreTimestamp(data[key]);
     }
+    return res;
   }
   return data;
 };
@@ -71,66 +76,75 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [washRecords, setWashRecords] = useState<WashRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Unified loading state
 
-  // Load current user from localStorage (mock auth)
   useEffect(() => {
-    try {
-      const storedUserJson = localStorage.getItem('currentUser');
-      if (storedUserJson) {
-        const storedUser: User = JSON.parse(storedUserJson);
-        if (storedUser && storedUser.token) {
-          setCurrentUser(storedUser);
-        } else {
-          localStorage.removeItem('currentUser');
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load user from localStorage", error);
-      localStorage.removeItem('currentUser');
-    }
-    // Data loading will happen in separate useEffects after Firestore is ready
-  }, []);
-
-  // Fetch initial data from Firestore
-  useEffect(() => {
-    const fetchData = async () => {
+    const initializeAuthAndData = async () => {
       setIsLoading(true);
+
+      let userFromStorage: User | null = null;
+      try {
+        const storedUserJson = localStorage.getItem('currentUser');
+        if (storedUserJson) {
+          const parsedUser: User = JSON.parse(storedUserJson);
+          if (parsedUser && parsedUser.token) {
+            userFromStorage = parsedUser;
+          } else {
+            localStorage.removeItem('currentUser');
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load user from localStorage", error);
+        localStorage.removeItem('currentUser');
+      }
+
+      if (userFromStorage) {
+        setCurrentUser(userFromStorage); // Set state immediately
+      }
+
       try {
         // Fetch Services
         const servicesQuery = query(collection(db, "services"), orderBy("name"));
         const servicesSnapshot = await getDocs(servicesQuery);
-        let fetchedServices = servicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service));
-        if (fetchedServices.length === 0) {
-          // If no services in DB, populate with initial and save them
-          for (const service of INITIAL_SERVICES) {
-            const { id, ...serviceData } = service; // Firestore generates ID
-            const docRef = await addDoc(collection(db, "services"), serviceData);
-            fetchedServices.push({ ...serviceData, id: docRef.id } as Service);
-          }
+        let fetchedServices = servicesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Service));
+        
+        if (fetchedServices.length === 0 && INITIAL_SERVICES.length > 0) {
+          const batch = writeBatch(db);
+          const newServicesArray: Service[] = [];
+          INITIAL_SERVICES.forEach(service => {
+            const { id, ...serviceData } = service; // Use defined ID for consistency or let Firestore generate
+            const docRef = doc(collection(db, "services"), id); // Use predefined ID
+            batch.set(docRef, serviceData);
+            newServicesArray.push({ ...serviceData, id: id } as Service);
+          });
+          await batch.commit();
+          fetchedServices = newServicesArray;
         }
         setServices(fetchedServices.map(s => convertFirestoreTimestamp(s)));
 
         // Fetch Wash Records
         const washRecordsQuery = query(collection(db, "washRecords"), orderBy("createdAt", "desc"));
         const washRecordsSnapshot = await getDocs(washRecordsQuery);
-        setWashRecords(washRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), washId: doc.id } as WashRecord)).map(r => convertFirestoreTimestamp(r)));
+        setWashRecords(washRecordsSnapshot.docs.map(docSnap => convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data(), washId: docSnap.id } as WashRecord)));
         
         // Fetch Billing Requests
         const billingRequestsQuery = query(collection(db, "billingRequests"), orderBy("requestedAt", "desc"));
         const billingRequestsSnapshot = await getDocs(billingRequestsQuery);
-        setBillingRequests(billingRequestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BillingChangeRequest)).map(br => convertFirestoreTimestamp(br)));
+        setBillingRequests(billingRequestsSnapshot.docs.map(docSnap => convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data() } as BillingChangeRequest)));
 
-        // Fetch Notifications (specific to user or role if currentUser is available)
-        if (currentUser) {
+        // Fetch Notifications (use userFromStorage as currentUser state update might not be synchronous for this effect run)
+        const effectiveUserForNotifications = userFromStorage;
+        const combinedNotifications = new Map<string, NotificationRecord>();
+
+        if (effectiveUserForNotifications) {
             const userNotificationsQuery = query(
                 collection(db, "notifications"), 
-                where("userId", "==", currentUser.id),
+                where("userId", "==", effectiveUserForNotifications.id),
                 orderBy("timestamp", "desc")
             );
             const roleNotificationsQuery = query(
                 collection(db, "notifications"), 
-                where("roleTarget", "==", currentUser.role),
+                where("roleTarget", "==", effectiveUserForNotifications.role),
                 orderBy("timestamp", "desc")
             );
             
@@ -139,64 +153,74 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 getDocs(roleNotificationsQuery)
             ]);
 
-            const combinedNotifications = new Map<string, NotificationRecord>();
-            userNotifsSnap.docs.forEach(doc => combinedNotifications.set(doc.id, { id: doc.id, ...doc.data() } as NotificationRecord));
-            roleNotifsSnap.docs.forEach(doc => combinedNotifications.set(doc.id, { id: doc.id, ...doc.data() } as NotificationRecord));
-            
-            setNotifications(Array.from(combinedNotifications.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(n => convertFirestoreTimestamp(n)));
+            userNotifsSnap.docs.forEach(docSnap => combinedNotifications.set(docSnap.id, convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data() } as NotificationRecord)));
+            roleNotifsSnap.docs.forEach(docSnap => combinedNotifications.set(docSnap.id, convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data() } as NotificationRecord)));
         } else {
-             // If no user, fetch only role-based notifications for owner (e.g., for initial display if needed)
             const ownerRoleNotificationsQuery = query(
                 collection(db, "notifications"), 
-                where("roleTarget", "==", "owner"), // Example: fetch owner notifications
+                where("roleTarget", "==", "owner"),
                 orderBy("timestamp", "desc")
             );
             const ownerNotifsSnap = await getDocs(ownerRoleNotificationsQuery);
-            setNotifications(ownerNotifsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NotificationRecord)).map(n => convertFirestoreTimestamp(n)));
+            ownerNotifsSnap.docs.forEach(docSnap => combinedNotifications.set(docSnap.id, convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data() } as NotificationRecord)));
         }
-
+        setNotifications(Array.from(combinedNotifications.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
       } catch (error) {
         console.error("Error fetching data from Firestore:", error);
         // Fallback to initial services if DB fetch fails and services are empty
-        if (services.length === 0) setServices(INITIAL_SERVICES);
+        if (services.length === 0) setServices(INITIAL_SERVICES.map(s => convertFirestoreTimestamp(s)));
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
+    initializeAuthAndData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]); // Re-fetch notifications when currentUser changes
+  }, []); // Empty dependency array ensures this runs once on mount
 
   const login = useCallback((userData: User) => {
     if (userData && userData.token) {
       setCurrentUser(userData);
       localStorage.setItem('currentUser', JSON.stringify(userData));
+      // Optionally re-fetch user-specific data or notifications here if needed after login
+      // For now, existing data fetch in useEffect on mount should cover initial load.
+      // If notifications need to be dynamically updated based on NEW login, trigger a fetch:
+      const fetchNotificationsForNewUser = async () => {
+        setIsLoading(true); // Indicate loading during this specific fetch
+        const combinedNotifications = new Map<string, NotificationRecord>();
+        const userNotificationsQuery = query(collection(db, "notifications"), where("userId", "==", userData.id), orderBy("timestamp", "desc"));
+        const roleNotificationsQuery = query(collection(db, "notifications"), where("roleTarget", "==", userData.role), orderBy("timestamp", "desc"));
+        const [userNotifsSnap, roleNotifsSnap] = await Promise.all([getDocs(userNotificationsQuery), getDocs(roleNotificationsQuery)]);
+        userNotifsSnap.docs.forEach(docSnap => combinedNotifications.set(docSnap.id, convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data() } as NotificationRecord)));
+        roleNotifsSnap.docs.forEach(docSnap => combinedNotifications.set(docSnap.id, convertFirestoreTimestamp({ id: docSnap.id, ...docSnap.data() } as NotificationRecord)));
+        setNotifications(Array.from(combinedNotifications.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        setIsLoading(false);
+      };
+      fetchNotificationsForNewUser();
     } else {
       console.error("Login attempt with invalid user data or missing token:", userData);
+      setIsLoading(false); // Ensure loading is false if login fails early
     }
-    setIsLoading(false); // Ensure loading is false after login attempt
   }, []);
 
   const logout = useCallback(() => {
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
-    setNotifications([]); // Clear notifications on logout
-    setIsLoading(false);
+    setNotifications([]); 
+    // No need to set isLoading here typically, as pages will redirect.
+    // If there was a specific "logging out" state, you could manage it.
   }, []);
 
-  const addNotification = useCallback(async (notificationData: Omit<NotificationRecord, 'id' | 'timestamp'>) => {
+  const addNotification = useCallback(async (notificationData: Omit<NotificationRecord, 'id' | 'timestamp' | 'read'>) => {
     try {
       const newNotificationData = {
         ...notificationData,
-        timestamp: serverTimestamp(), // Use server timestamp
-        read: false, // Ensure 'read' is explicitly set
+        timestamp: serverTimestamp(), 
+        read: false, 
       };
       const docRef = await addDoc(collection(db, "notifications"), newNotificationData);
-      // Optimistically update UI or re-fetch, for simplicity re-fetching might be okay for now
-      // Or, create the NotificationRecord client-side with the new ID and current client time for immediate UI update
-       const addedNotification = { ...notificationData, id: docRef.id, timestamp: new Date().toISOString(), read: false };
-       setNotifications(prev => [addedNotification, ...prev].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+       const addedNotification = { ...newNotificationData, id: docRef.id, timestamp: new Date().toISOString() } as NotificationRecord; // 'read' is part of newNotificationData
+       setNotifications(prev => [convertFirestoreTimestamp(addedNotification), ...prev].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
     } catch (error) {
       console.error("Error adding notification: ", error);
@@ -215,14 +239,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   const markAllNotificationsAsRead = useCallback(async () => {
     if (!currentUser) return;
-    const unreadNotifs = notifications.filter(n => (n.userId === currentUser.id || n.roleTarget === currentUser.role) && !n.read);
+    // Filter for current user's unread notifications
+    const unreadNotifsToUpdate = notifications.filter(n => 
+        ((n.userId === currentUser.id) || (n.roleTarget === currentUser.role)) && !n.read
+    );
+
+    if (unreadNotifsToUpdate.length === 0) return;
+
     try {
-      const batch = []; // Firestore batch write would be better here if many updates
-      for (const notif of unreadNotifs) {
-        batch.push(updateDoc(doc(db, "notifications", notif.id), { read: true }));
-      }
-      await Promise.all(batch);
-      setNotifications(prev => prev.map(n => (n.userId === currentUser.id || n.roleTarget === currentUser.role) && !n.read ? { ...n, read: true } : n));
+      const batchCommit = writeBatch(db);
+      unreadNotifsToUpdate.forEach(notif => {
+        batchCommit.update(doc(db, "notifications", notif.id), { read: true });
+      });
+      await batchCommit.commit();
+      
+      setNotifications(prev => prev.map(n => {
+        const shouldMarkRead = ((n.userId === currentUser.id) || (n.roleTarget === currentUser.role)) && !n.read;
+        return shouldMarkRead ? { ...n, read: true } : n;
+      }));
     } catch (error) {
       console.error("Error marking all notifications as read: ", error);
     }
@@ -231,7 +265,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const getUnreadNotificationCount = useCallback(() => {
     if (!currentUser) return 0;
-    return notifications.filter(n => (n.userId === currentUser.id || n.roleTarget === currentUser.role) && !n.read).length;
+    return notifications.filter(n => ((n.userId === currentUser.id) || (n.roleTarget === currentUser.role)) && !n.read).length;
   }, [notifications, currentUser]);
 
   const addBillingRequest = useCallback(async (requestData: Omit<BillingChangeRequest, 'id' | 'requestedAt' | 'status' | 'staffId' | 'staffName'>) => {
@@ -248,12 +282,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         status: 'pending' as 'pending',
       };
       const docRef = await addDoc(collection(db, "billingRequests"), newRequestData);
-      const addedRequest = { ...requestData, id: docRef.id, staffId: currentUser.id, staffName: currentUser.username, requestedAt: new Date().toISOString(), status: 'pending' as 'pending' };
-      setBillingRequests(prev => [addedRequest, ...prev].sort((a,b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()));
+      const addedRequest = { ...newRequestData, id: docRef.id, requestedAt: new Date().toISOString() } as BillingChangeRequest;
+      setBillingRequests(prev => [convertFirestoreTimestamp(addedRequest), ...prev].sort((a,b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()));
 
       await addNotification({
-        userId: MOCK_OWNER_ID_FOR_NOTIFICATIONS, // Or target a specific owner user ID
-        roleTarget: 'owner',
+        roleTarget: 'owner', // Target all owners
         message: `New billing change request (#${docRef.id.substring(0,6)}) for Wash ID ${requestData.washId} submitted by ${currentUser.username}.`,
         link: `/dashboard?tab=billing-requests&highlight=${docRef.id}`,
         relatedRecordId: docRef.id,
@@ -276,20 +309,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       let originalRequestWashId: string | undefined;
 
       setBillingRequests(prevRequests => {
-        return prevRequests.map(req => {
+        const updatedRequests = prevRequests.map(req => {
           if (req.id === requestId) {
             staffToNotifyId = req.staffId;
             originalRequestWashId = req.washId;
             return { ...req, status };
           }
           return req;
-        }).sort((a,b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+        });
+        return updatedRequests.sort((a,b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
       });
       
       if (staffToNotifyId && originalRequestWashId) {
         await addNotification({
-          userId: staffToNotifyId,
-          roleTarget: 'staff',
+          userId: staffToNotifyId, // Target specific staff member
           message: `Your billing change request (#${requestId.substring(0,6)}) for Wash ID ${originalRequestWashId} has been ${status}.`,
           relatedRecordId: requestId,
         });
@@ -308,8 +341,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         discountPercentage: recordData.discountPercentage || 0,
       };
       const docRef = await addDoc(collection(db, "washRecords"), newRecordData);
-      const addedRecord = { ...recordData, washId: docRef.id, customerName: recordData.customerName || "N/A", createdAt: new Date().toISOString(), discountPercentage: recordData.discountPercentage || 0};
-      setWashRecords(prev => [addedRecord, ...prev].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      const addedRecord = { ...newRecordData, washId: docRef.id, createdAt: new Date().toISOString() } as WashRecord;
+      setWashRecords(prev => [convertFirestoreTimestamp(addedRecord), ...prev].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } catch (error) {
       console.error("Error adding wash record: ", error);
     }
@@ -324,9 +357,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const recordRef = doc(db, "washRecords", washId);
       await updateDoc(recordRef, updatedData);
       setWashRecords(prevRecords => {
-        return prevRecords.map(record =>
-          record.washId === washId ? { ...record, ...updatedData, customerName: updatedData.customerName || record.customerName, discountPercentage: updatedData.discountPercentage ?? record.discountPercentage } : record
-        ).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const updatedRecords = prevRecords.map(record =>
+          record.washId === washId ? convertFirestoreTimestamp({ ...record, ...updatedData }) : record
+        );
+        return updatedRecords.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       });
     } catch (error) {
       console.error("Error updating wash record: ", error);
@@ -349,9 +383,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const addService = useCallback(async (serviceData: Omit<Service, 'id'>) => {
     if (!currentUser || currentUser.role !== 'owner') return;
     try {
+      // Firestore will auto-generate an ID if we don't specify one.
+      // If you want to use predefined IDs from INITIAL_SERVICES, that needs specific handling during initialization.
       const docRef = await addDoc(collection(db, "services"), serviceData);
       const newService = { ...serviceData, id: docRef.id };
-      setServices(prev => [...prev, newService].sort((a,b) => a.name.localeCompare(b.name)));
+      setServices(prev => [convertFirestoreTimestamp(newService), ...prev].sort((a,b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Error adding service: ", error);
     }
@@ -362,7 +398,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const serviceRef = doc(db, "services", serviceId);
       await updateDoc(serviceRef, updatedData);
-      setServices(prev => prev.map(s => s.id === serviceId ? { ...s, ...updatedData } : s).sort((a,b) => a.name.localeCompare(b.name)));
+      setServices(prev => prev.map(s => s.id === serviceId ? convertFirestoreTimestamp({ ...s, ...updatedData }) : s).sort((a,b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error("Error updating service: ", error);
     }
@@ -406,3 +442,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+
+    
