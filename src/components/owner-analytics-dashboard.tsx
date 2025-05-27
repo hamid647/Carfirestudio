@@ -15,7 +15,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, Pie, PieChart, Rectangle, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell, LabelList } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Line, LineChart, Pie, PieChart, Rectangle, ResponsiveContainer, XAxis, YAxis, Cell, LabelList } from 'recharts'; // Removed Tooltip from here as ChartTooltip is used
 import { format, parseISO, subDays, startOfDay, isWithinInterval, eachDayOfInterval, endOfDay } from 'date-fns';
 import { TrendingUp, Car, PieChartIcon, DollarSign, AlertTriangle, BarChart3 } from 'lucide-react';
 
@@ -212,7 +212,15 @@ export default function OwnerAnalyticsDashboard() {
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis tickFormatter={(value) => `$${value.toFixed(0)}`} />
-                <Tooltip content={<ChartTooltipContent indicator="line" formatter={(value) => typeof value === 'number' ? `$${value.toFixed(2)}` : value} />} />
+                <ChartTooltip
+                  formatter={(value, name) => {
+                    if (typeof value === 'number') {
+                      return [`$${value.toFixed(2)}`, name];
+                    }
+                    return [value, name];
+                  }}
+                  content={<ChartTooltipContent indicator="line" />} 
+                />
                 <Line dataKey="sales" type="monotone" stroke="var(--color-sales)" strokeWidth={2} dot={false} />
               </LineChart>
             </ChartContainer>
@@ -233,7 +241,7 @@ export default function OwnerAnalyticsDashboard() {
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
                 <YAxis />
-                <Tooltip content={<ChartTooltipContent />} />
+                <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar dataKey="count" fill="var(--color-cars)" radius={4}>
                    <LabelList dataKey="count" position="top" offset={5} formatter={(value: number) => value > 0 ? value : ''} />
                 </Bar>
@@ -256,7 +264,7 @@ export default function OwnerAnalyticsDashboard() {
             {topServicesData.length > 0 ? (
                 <ChartContainer config={{}} className="h-[300px] w-full max-w-xs">
                     <PieChart>
-                    <Tooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
+                    <ChartTooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
                     <Pie data={topServicesData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
                         {topServicesData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -283,7 +291,15 @@ export default function OwnerAnalyticsDashboard() {
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
                     <YAxis tickFormatter={(value) => `$${value.toFixed(0)}`} />
-                    <Tooltip content={<ChartTooltipContent formatter={(value, name) => ({ value: typeof value === 'number' ? `$${value.toFixed(2)}` : value, name})}/>} />
+                    <ChartTooltip
+                      formatter={(value, name) => { // name is the category dataKey
+                        if (typeof value === 'number') {
+                          return [`$${value.toFixed(2)}`, name];
+                        }
+                        return [value, name];
+                      }}
+                      content={<ChartTooltipContent />}
+                    />
                     <ChartLegend content={<ChartLegendContent />} />
                     {SERVICE_CATEGORIES.map((category, index) => (
                         <Bar key={category} dataKey={category} stackId="a" fill={`var(--color-${category})`} radius={[4,4,0,0]} />
@@ -296,3 +312,4 @@ export default function OwnerAnalyticsDashboard() {
     </div>
   );
 }
+
