@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "export": "next export"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.8.0",
@@ -43,7 +44,9 @@
     "date-fns": "^3.6.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "firebase": "^10.12.2",
+    "firebase": "^10.14.1",
+    "firebase-admin": "^13.4.0",
+    "firebase-functions": "^6.3.2",
     "genkit": "^1.8.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.475.0",
